@@ -1,177 +1,158 @@
 import {SceneKeys} from '..';
+import { Cell, City } from '../City';
+import { Collector } from '../structures/Collector';
+import { Network } from '../Network';
+import { Weapon } from '../structures/Weapon';
 
-interface Energy {
-  follower: Phaser.GameObjects.PathFollower;
-  id: string;
-}
-
+type CameraRotations = '0' | '90' | '180' | '270';
 export default class GameScene extends Phaser.Scene {
-  observer: Phaser.Events.EventEmitter | undefined;
-  isPaused: boolean = false;
-  flowingEnergy: Map<string, Energy> = new Map();
-  private background: Phaser.GameObjects.TileSprite;
-  private gridSize: number = 40;
-  controls: Phaser.Cameras.Controls.SmoothedKeyControl;
+  observer: Phaser.Events.EventEmitter = new Phaser.Events.EventEmitter();
+  controls!: Phaser.Cameras.Controls.SmoothedKeyControl;
+  gridSize: number = 40;
+  mapSizeX: number = 17;
+  mapSizeY: number = 17;
+
+  worldData: Cell[][] = [];
+  city!: City;
+  network!: Network;
+
+  private selectedStructure: 'Collector' | 'Weapon' | null = null;
+  private structures = {[Weapon.name]: Weapon, [Collector.name]: Collector};
 
   constructor() {
     super({key: SceneKeys.GAME_SCENE});
+    for (let y = 0; y < this.mapSizeY; y++) {
+      const row : Cell[]= [];
+      for (let x = 0; x < this.mapSizeX; x++) {
+        row.push({x, y, ref: null});
+      }
+      this.worldData.push(row);
+    }
+
+    console.log('worldData', this.worldData);
   }
 
   private create() {
+    this.setupCameraAndInput();
+    this.observer.removeAllListeners();
+    this.network = new Network(this);
+    this.city = new City(this, Math.floor(this.mapSizeX / 2), Math.floor(this.mapSizeY / 2));
+
+    const graphics = this.add.graphics();
+    graphics.fillStyle(0xffffff, 1);
+    graphics.lineStyle(1, 0xcccccc, 1);
+    graphics.fillRect(0, 0, this.gridSize, this.gridSize);
+    graphics.strokeRect(0, 0, this.gridSize, this.gridSize);
+    graphics.generateTexture('cell_white', this.gridSize, this.gridSize);
+    graphics.clear();
+    this.add.tileSprite(0, 0, this.gridSize * this.mapSizeX,this.gridSize * this.mapSizeY, 'cell_white').setOrigin(0, 0);
+
+    graphics.fillStyle(0xe2ffe9, 1);
+    graphics.lineStyle(1, 0x888888, 1);
+    graphics.fillRect(0, 0, this.gridSize, this.gridSize);
+    graphics.strokeRect(0, 0, this.gridSize, this.gridSize);
+    graphics.generateTexture('cell_green', this.gridSize, this.gridSize);
+    graphics.destroy();
+
+    new Weapon(this, 18, 2);
+    new Weapon(this, 19, 3);
+    new Weapon(this, 20, 2);
+    new Weapon(this, 21, 3);
+    new Weapon(this, 22, 2);
+  }
+
+  update(time: number, delta: number) {
+    this.controls.update(delta);
+  }
+
+  private setupCameraAndInput() {
+    // CAMERA STUFF
     const camera = this.cameras.main;
-    camera.zoom = 1;
-    // this.cameras.main.scrollX = 320;
-    // this.cameras.main.scrollY = 180;
+    camera.setZoom(1);
+    camera.setBackgroundColor(0x333333);
+    camera.centerOnX(this.gridSize * this.mapSizeX / 2);
+    camera.centerOnY(this.gridSize * this.mapSizeY / 2);
 
-    this.input.mousePointer.motionFactor = 0.5;
-    this.input.pointer1.motionFactor = 0.5;
+    // KEYBOARD STUFF
+    let cameraRotationDeg = 0;
+    let rotating = false;
+    const keyboard = this.input.keyboard;
+    if (!keyboard) throw new Error('cursors is null');
+    const keyW = keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.W);
+    const keyA = keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.A);
+    const keyS = keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.S);
+    const keyD = keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.D);
+    const keyR = keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.R);
+    const keyONE = keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.ONE);
+    const keyTWO = keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.TWO);
+    const keyESC = keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.ESC);
+    const keyX = keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.X);
 
-    this.input.on('pointermove', function (p) {
+    const rotKeyMap: {[key in CameraRotations]: [Phaser.Input.Keyboard.Key, Phaser.Input.Keyboard.Key, Phaser.Input.Keyboard.Key, Phaser.Input.Keyboard.Key]} = {
+      '0': [keyW, keyA, keyS, keyD],
+      '90': [keyD, keyW, keyA, keyS],
+      '180': [keyS, keyD, keyW, keyA],
+      '270': [keyA, keyS, keyD, keyW],
+    };
+
+    this.controls = new Phaser.Cameras.Controls.SmoothedKeyControl({
+      camera,
+      up: rotKeyMap[String(cameraRotationDeg) as CameraRotations][0],
+      left: rotKeyMap[String(cameraRotationDeg) as CameraRotations][1],
+      down: rotKeyMap[String(cameraRotationDeg) as CameraRotations][2],
+      right: rotKeyMap[String(cameraRotationDeg) as CameraRotations][3],
+      zoomIn: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.Q),
+      zoomOut: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.E),
+      acceleration: 10,
+      drag: 0.1,
+      maxSpeed: 0.5,
+      maxZoom: 4/3,
+      minZoom: 2/3,
+    });
+
+    keyR.onDown = evt => {
+      if (rotating) return;
+      if(evt.ctrlKey) return;
+      rotating = true;
+      cameraRotationDeg = cameraRotationDeg + 90;
+      if (cameraRotationDeg >= 360) cameraRotationDeg = 0;
+      camera.rotateTo(Phaser.Math.DegToRad(cameraRotationDeg), false, 350, 'Linear', false, (ref, progress) => {if (progress === 1) rotating = false;});
+      if (!this.controls) return;
+      this.controls.up = rotKeyMap[String(cameraRotationDeg) as CameraRotations][0];
+      this.controls.left = rotKeyMap[String(cameraRotationDeg) as CameraRotations][1];
+      this.controls.down = rotKeyMap[String(cameraRotationDeg) as CameraRotations][2];
+      this.controls.right = rotKeyMap[String(cameraRotationDeg) as CameraRotations][3];
+    };
+
+    keyONE.onDown = () => this.selectedStructure = 'Collector';
+    keyTWO.onDown = () => this.selectedStructure = 'Weapon';
+    keyESC.onDown = () => this.selectedStructure = null;
+    keyX.onDown = () => this.selectedStructure = null;
+
+    // MOUSE AND POINTER STUFF
+    const input = this.input;
+    input.mousePointer.motionFactor = 0.5;
+    input.pointer1.motionFactor = 0.5;
+
+    input.on('pointermove', (p: Phaser.Input.Pointer) => {
       if (!p.isDown) return;
       const { x, y } = p.velocity;
       camera.scrollX -= x / camera.zoom;
       camera.scrollY -= y / camera.zoom;
     });
 
-    this.input.on('wheel',  (pointer, gameObjects, deltaX, deltaY, deltaZ) => {
+    input.on('pointerdown', (p: Phaser.Input.Pointer) => {
+      const { worldX, worldY } = p;
+      const coordX = Math.floor(worldX / this.gridSize);
+      const coordY = Math.floor(worldY / this.gridSize);
+      console.log('pointerdown', coordX, coordY);
+      this.network.placeNode(coordX, coordY);
+    });
+
+    input.on('wheel', (pointer: Phaser.Input.Pointer, gameObjects: unknown[], deltaX: number, deltaY: number) => {
       const newZoom = camera.zoom - (deltaY > 0 ? 0.025 : -0.025);
-      const clampedZoom = Phaser.Math.Clamp(newZoom, 0.5, 1.5);
+      const clampedZoom = Phaser.Math.Clamp(newZoom, 2/3, 4/3);
       camera.zoom = clampedZoom;
-
-      // this.camera.centerOn(pointer.worldX, pointer.worldY);
-      // this.camera.pan(pointer.worldX, pointer.worldY, 2000, "Power2");
-
     });
-
-    camera.setViewport(0, 0, this.gridSize * 64, this.gridSize * 32);
-
-    if (!this.input.keyboard) throw new Error('cursors is null');
-
-    this.controls = new Phaser.Cameras.Controls.SmoothedKeyControl({
-      camera: this.cameras.main,
-      up: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.W),
-      left: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.A),
-      down: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.S),
-      right: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.D),
-      zoomIn: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.Q),
-      zoomOut: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.E),
-      acceleration: 10,
-      drag: 0.1,
-      maxSpeed: 0.5,
-      maxZoom: 1.5,
-      minZoom: 0.5
-    });
-
-    // Ensure that listeners from previous runs are cleared. Otherwise for a single emit it may call the listener multiple times depending on amount of game-over/replays
-    if (this.observer) this.observer.destroy();
-    this.observer = new Phaser.Events.EventEmitter();
-
-    // this.scene.launch(SceneKeys.GAME_UI_SCENE, [this.observer, () => {
-    //     this.scene.restart();
-    // }]);
-
-    const graphics = this.add.graphics();
-    graphics.lineStyle(1, 0x888888, 1);
-    graphics.strokeRect(0, 0, this.gridSize, this.gridSize);
-    graphics.generateTexture('gridTexture', this.gridSize, this.gridSize);
-    graphics.destroy();
-
-    this.background = this.add.tileSprite(0, 0, camera.width * (1 / camera.zoom), camera.height * (1 / camera.zoom), 'gridTexture').setOrigin(0, 0);
-
-    this.input.keyboard?.on('keydown-SPACE', () => {
-      if (this.isPaused) this.flowingEnergy.forEach(energy => energy.follower.resumeFollow());
-      else this.flowingEnergy.forEach(energy => energy.follower.pauseFollow());
-      this.isPaused = !this.isPaused;
-    });
-
-    //////////////////////////////////////////////////
-
-    const points: number[] = [
-      this.gridSize * 3.5, this.gridSize * 13,
-      this.gridSize * 6, this.gridSize * 13,
-      this.gridSize * 6, this.gridSize * 15,
-      this.gridSize * 7, this.gridSize * 14,
-      this.gridSize * 8, this.gridSize * 12,
-      this.gridSize * 9, this.gridSize * 13,
-      this.gridSize * 9, this.gridSize * 10,
-      this.gridSize * 10, this.gridSize * 11,
-      this.gridSize * 17, this.gridSize * 12,
-      this.gridSize * 18, this.gridSize * 10,
-      this.gridSize * 18, this.gridSize * 5,
-      this.gridSize * 19, this.gridSize * 5,
-      this.gridSize * 20, this.gridSize * 17,
-      this.gridSize * 30, this.gridSize * 20,
-      this.gridSize * 37, this.gridSize * 2
-    ].map(p => p + (this.gridSize / 2));
-
-    const path = new Phaser.Curves.Path(points[0], points[1]);
-    for (let i = 2; i < points.length; i += 2) path.lineTo(points[i], points[i + 1]);
-    const network = this.add.graphics();
-    network.lineStyle(6, 0x000000, 1);
-    path.draw(network, 1);
-    network.lineStyle(3, 0xffffff, 1);
-    path.draw(network, 1);
-
-    //////////////////////////////////////////////////
-
-    const collectors = this.add.graphics();
-    collectors.lineStyle(2, 0x000000 , 1);
-    for (let i = 0; i < points.length; i += 2) this.drawCollector(collectors, points[i], points[i + 1]);
-    this.drawCollector(collectors, this.gridSize * 1, this.gridSize * 13.5);
-    this.drawCollector(collectors, this.gridSize * 2.5, this.gridSize * 15);
-    this.drawCollector(collectors, this.gridSize * 2.5, this.gridSize * 12);
-
-    ///////////////////////////////////////////////////
-
-    const radius = 8;
-    const strokeWidth = 1.5;
-    const circle = this.add.graphics({ lineStyle: { width: strokeWidth, color: 0x0000 }, fillStyle: { color: 0xd3d3d3 } });
-    circle.fillCircle(radius, radius, radius); // Adjust the radius as needed
-    circle.strokeCircle(radius, radius, radius - (strokeWidth / 2)); // Adjust the radius as needed
-    circle.generateTexture('energy', radius * 2, radius * 2); // Adjust the size as needed
-
-    const pathLength = path.getLength();
-    const speed = 75; // units per second
-    const duration = (pathLength / speed) * 1000; // convert to milliseconds
-
-    let i = 0;
-    let handle: NodeJS.Timeout | null = null;
-    handle = setInterval(() => {
-      const energyBall: Energy = {follower: this.add.follower(path, points[0], points[1], 'energy'), id: Math.random().toString(36).substring(2, 10)};
-      energyBall.follower.setScale(1);
-      this.flowingEnergy.set(energyBall.id, energyBall);
-      energyBall.follower.startFollow({duration, repeat: 0, onComplete: () => {
-        energyBall.follower.destroy(); // TODO maybe add follower to a pool instead
-        this.flowingEnergy.delete(energyBall.id);
-
-      }});
-      if (++i >= 10000 && handle) clearInterval(handle);
-    }, 500);
-
-    ///////////////////////////////////////////////////
-
-    const city = this.add.graphics();
-    city.fillStyle(0xd3d3d3, 1);
-    city.lineStyle(2, 0x000000 , 1);
-    city.fillRoundedRect(this.gridSize, (this.gridSize * 13) - (this.gridSize * 1), this.gridSize * 3, this.gridSize * 3, 16);
-    city.strokeRoundedRect(this.gridSize, (this.gridSize * 13) - (this.gridSize * 1), this.gridSize * 3, this.gridSize * 3, 16);
-    city.fillStyle(0xffffff, 1);
-    city.fillRoundedRect(this.gridSize + (this.gridSize / 4), (this.gridSize * 13) - (this.gridSize * 0.75), this.gridSize * 2.5, this.gridSize * 2.5, 10);
-    city.strokeRoundedRect(this.gridSize + (this.gridSize / 4), (this.gridSize * 13) - (this.gridSize * 0.75), this.gridSize * 2.5, this.gridSize * 2.5, 10);
-
-    //////////////////////////////////////////
-  }
-
-  private drawCollector(graphics: Phaser.GameObjects.Graphics, x: number, y: number) {
-    graphics.fillStyle(0xd3d3d3, 1);
-    graphics.fillCircle(x, y, this.gridSize / 4);
-    graphics.strokeCircle(x, y, this.gridSize / 4);
-    graphics.fillStyle(0xffffff, 1);
-    graphics.fillCircle(x, y, this.gridSize / 8);
-    graphics.strokeCircle(x, y, this.gridSize / 8);
-  }
-
-  update(time: number, delta: number) {
-    this.controls.update(delta);
   }
 }
