@@ -23,21 +23,22 @@ export class Network {
     const start = this.placeNode(0, 0);
     const end = this.placeNode(this.scene.mapSizeX - 1, this.scene.mapSizeY - 1);
 
-    for (let y = 2; y < this.scene.mapSizeY - 2; y += 2) {
-      for (let x = 2; x < this.scene.mapSizeX - 2; x += 2) {
-        // if (x > 10 && x < 20 && y > 10 && y < 20) continue;
-        // if (x > 25 && x < 30 && y > 25 && y < 30) continue;
-        // const XRand = Math.abs(Math.floor(Math.random() * this.scene.mapSizeX - 2));
-        // const YRand = Math.abs(Math.floor(Math.random() * this.scene.mapSizeY - 2));
-        this.placeNode(x, y);
-
+    for (let y = 2; y < this.scene.mapSizeY - 2; y += 3) {
+      for (let x = 2; x < this.scene.mapSizeX - 2; x += 3) {
+        if (x > 10 && x < 20 && y > 10 && y < 20) continue;
+        if (x > 25 && x < 30 && y > 25 && y < 30) continue;
+        const XRand = Math.abs(Math.floor(Math.random() * this.scene.mapSizeX - 2));
+        const YRand = Math.abs(Math.floor(Math.random() * this.scene.mapSizeY - 2));
+        this.placeNode(XRand, YRand);
+        // this.placeNode(x, y);
       }
     }
 
-    const g = this.scene.add.graphics({ lineStyle: { width: 5, color: 0x0000 }, fillStyle: { color: 0xd3d3d3 }});
+    const g = this.scene.add.graphics({ lineStyle: { width: 5, color: 0x0000 }, fillStyle: { color: 0x00ff00 }});
+    g.setDepth(100);
     setInterval(() => {
       g.clear();
-      const res = this.graph.getShortestPath(start, end);
+      const res = this.graph.findPath(start, end, 'euclidian', g);
       g.setDepth(100);
       res.path.forEach((vert, i) => {
         if (i < res.path.length - 1) {
@@ -45,9 +46,7 @@ export class Network {
           g.lineBetween(vert.x, vert.y, vert2.x, vert2.y);
         }
       });
-
-      console.log('dijkstraShortestPath', res, start, end);
-    }, 2000);
+    }, 3000);
   }
 
   placeNode(coordX: number, coordY: number): string {

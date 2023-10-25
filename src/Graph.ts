@@ -16,18 +16,27 @@ interface Vertex<T = unknown> {
   data: T;
 }
 
-interface DijkstraResult<V = unknown> {
+interface PathfinderResult<V = unknown> {
   distance: number;
   path: Vertex<V>[];
   found: boolean;
 }
 
+type Heuristics = 'euclidian' | 'manhattan' | 'chebyshev' | 'octile';
+
 // Custom Graph implementation loosely based on "graph-typed" interface (npm package)
-// TODO write unit tests
+// TODO remove debugging code and write unit tests
 export class Graph<V = {x: number, y: number}, E = unknown> {
   readonly vertices: Map<string, Vertex<V>> = new Map();
   readonly edges: Map<string, Edge<E>> = new Map();
   readonly edgesByVertex: Map<string, Edge<E>[]> = new Map();
+
+  private readonly heuristics: {[key in Heuristics]: (a: Vertex<V>, b: Vertex<V>) => number }= {
+    euclidian: this.heuristicEuclidian,
+    manhattan: this.heuristicManhattan,
+    chebyshev: this.heuristicChebyshev,
+    octile: this.heuristicOctile,
+  };
 
   createVertex(id: VertexId, x: number, y: number, value: V): Vertex<V> {
     if (this.vertices.has(id)) throw new Error(`Vertex with id ${id} already exists`);
@@ -101,55 +110,92 @@ export class Graph<V = {x: number, y: number}, E = unknown> {
     return edgeToRemove;
   }
 
-  // Sort of an A* implementation
-  getShortestPath(startId: VertexId, endId: VertexId): DijkstraResult<V> {
+  // Sort of an A* implementation. Naming based on wikipedia pseudo code https://en.wikipedia.org/wiki/A*_search_algorithm
+  // TODO remove debugging code
+  findPath(startId: VertexId, endId: VertexId, heuristic: Heuristics = 'euclidian',  g: Phaser.GameObjects.Graphics): PathfinderResult<V> {
     console.time('getShortestPath');
-    const startVertex = this.vertices.get(startId);
-    const endVertex = this.vertices.get(endId);
-    if (!endVertex || !startVertex) return {distance: Infinity, path: [], found: false};
+    const start = this.vertices.get(startId);
+    const goal = this.vertices.get(endId);
+    if (!goal || !start) return {distance: Infinity, path: [], found: false};
+    if (this.edgesByVertex.get(startId)?.length === 0 || this.edgesByVertex.get(endId)?.length === 0) {
+      console.timeEnd('getShortestPath');
+      return {distance: Infinity, path: [], found: false};
+    }
 
-    const distances: { [key: string]: number } = {};
-    const previous: { [key: string]: Vertex<V> | null } = {};
-    distances[startId] = 0;
+    const openSet: { value: Vertex<V>, fScore: number }[] = [];
+    const closedSet: Set<Vertex<V>> = new Set();
+    const cameFrom: Map<Vertex<V>, Vertex<V>> = new Map();
+    const gScore: Map<Vertex<V>, number> = new Map();
 
-    const items: { value: Vertex<V>, priority: number }[] = [];
+    gScore.set(start, 0);
+    openSet.push({ value: start, fScore: this.heuristics[heuristic](start, goal) });
+
     let needsSorting = false;
-    items.push({ value: startVertex, priority: 0 });
-    while (items.length) {
-      const currentVertex = items.pop()!.value;
-      if (currentVertex.id === endId) break; // Stop if the end vertex is reached
-
+    let i = 0;
+    while (openSet.length) {
+      i++;
+      const current = openSet.pop()!.value;
+      g.fillCircle(current.x, current.y, 20);
+      if (current.id === endId) break;
       needsSorting = false;
-      const currentEdges = this.edgesByVertex.get(currentVertex.id) || [];
-      for (const edge of currentEdges) {
-        const adjacentVertexId = edge.vertA === currentVertex.id ? edge.vertB : edge.vertA;
-        const newDistance = distances[currentVertex.id] + edge.weight;
 
-        if (newDistance < (distances[adjacentVertexId] || Infinity)) {
-          distances[adjacentVertexId] = newDistance;
-          previous[adjacentVertexId] = currentVertex;
-          const adjacentVertex = this.vertices.get(adjacentVertexId)!;
-          const heuristicCost = Math.sqrt(Math.pow(adjacentVertex.x - endVertex.x, 2) + Math.pow(adjacentVertex.y - endVertex.y, 2));
-          items.push({ value: adjacentVertex, priority: newDistance + heuristicCost});
-          needsSorting = true;
+      const currentEdges = this.edgesByVertex.get(current.id) || [];
+      for (const edge of currentEdges) {
+        i++;
+        const neighbour = this.vertices.get(edge.vertA === current.id ? edge.vertB : edge.vertA)!;
+        const tentativeGScore = (gScore.get(current) || 0) + edge.weight;
+
+        if (tentativeGScore < (gScore.get(neighbour) || Infinity)) {
+          cameFrom.set(neighbour, current);
+          gScore.set(neighbour, tentativeGScore);
+          if (!closedSet.has(neighbour)) {
+            // tiebreaker prevents visits to unneeded vertices but sacrifices a bit of accuracy
+            const tiebreaker = 0.275 * (goal.x - current.x + goal.y - current.y); // adjust the hard-coded constant to change the accuracy
+            openSet.push({ value: neighbour, fScore: tentativeGScore + this.heuristics[heuristic](neighbour, goal) + tiebreaker});
+            needsSorting = true;
+          }
+          closedSet.add(neighbour);
         }
       }
-      needsSorting && items.sort((a, b) => b.priority - a.priority);
+      if (needsSorting) openSet.sort((a, b) => b.fScore - a.fScore);
     }
 
     // Extract the shortest path from startId to endId using the previous map
     const path: Vertex<V>[] = [];
-    let current = endVertex;
+    let current = goal;
     while (current && current.id !== startId) {
-      if (previous[current.id] === null) return {distance: Infinity, path: [], found: false}; // No path found
+      if (!cameFrom.get(current)) {
+        console.timeEnd('getShortestPath');
+        console.log('getShortestPath', i);
+        return {distance: Infinity, path: [], found: false}; // No path found
+      }
       path.push(current);
-      current = previous[current.id]!;
+      current = cameFrom.get(current)!;
     }
-    path.push(startVertex);
+    path.push(start);
     path.reverse();
 
-    const distance = distances[endId];
+    const distance = gScore.get(goal);
     console.timeEnd('getShortestPath');
+    console.log('getShortestPath', i);
     return distance ? {distance, path, found: true} : {distance: Infinity, path: [], found: false};
+  }
+
+  private heuristicEuclidian(a: Vertex<V>, b: Vertex<V>): number {
+    return Math.sqrt(Math.pow(a.x - b.x, 2) + Math.pow(a.y - b.y, 2));
+  }
+
+  private heuristicManhattan(a: Vertex<V>, b: Vertex<V>): number {
+    return Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
+  }
+
+  private heuristicChebyshev(a: Vertex<V>, b: Vertex<V>): number {
+    return Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y));
+  }
+
+  private heuristicOctile(a: Vertex<V>, b: Vertex<V>): number {
+    const dx = Math.abs(a.x - b.x);
+    const dy = Math.abs(a.y - b.y);
+    return Math.max(dx, dy) + 0.414 * Math.min(dx, dy);
   }
 }

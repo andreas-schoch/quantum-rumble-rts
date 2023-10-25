@@ -9,8 +9,8 @@ export default class GameScene extends Phaser.Scene {
   observer: Phaser.Events.EventEmitter = new Phaser.Events.EventEmitter();
   controls!: Phaser.Cameras.Controls.SmoothedKeyControl;
   gridSize: number = 40;
-  mapSizeX: number = 17;
-  mapSizeY: number = 17;
+  mapSizeX: number = 33 * 4;
+  mapSizeY: number = 33 * 4;
 
   worldData: Cell[][] = [];
   city!: City;
