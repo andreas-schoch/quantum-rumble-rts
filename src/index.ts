@@ -7,6 +7,10 @@ export const SETTINGS_KEY_RESOLUTION = 'quantum_rumble_resolution';
 export const DEFAULT_WIDTH = 1920;
 export const DEFAULT_HEIGHT = 1080;
 export const RESOLUTION_SCALE: number = Number(localStorage.getItem(SETTINGS_KEY_RESOLUTION) || 1);
+export const DEFAULT_ZOOM: number = 1;
+export const MAX_ZOOM: number = 2.5 * RESOLUTION_SCALE;
+export const MIN_ZOOM: number = 1/3 * RESOLUTION_SCALE;
+
 
 export const enum SceneKeys {
   PRELOAD_SCENE = 'PreloadScene',

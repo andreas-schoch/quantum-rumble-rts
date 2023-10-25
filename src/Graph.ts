@@ -22,7 +22,7 @@ interface PathfinderResult<V = unknown> {
   found: boolean;
 }
 
-type Heuristics = 'euclidian' | 'manhattan' | 'chebyshev' | 'octile';
+type Heuristic = 'euclidian' | 'manhattan' | 'chebyshev' | 'octile';
 
 // Custom Graph implementation loosely based on "graph-typed" interface (npm package)
 // TODO remove debugging code and write unit tests
@@ -31,7 +31,7 @@ export class Graph<V = {x: number, y: number}, E = unknown> {
   readonly edges: Map<string, Edge<E>> = new Map();
   readonly edgesByVertex: Map<string, Edge<E>[]> = new Map();
 
-  private readonly heuristics: {[key in Heuristics]: (a: Vertex<V>, b: Vertex<V>) => number }= {
+  private readonly heuristics: {[key in Heuristic]: (a: Vertex<V>, b: Vertex<V>) => number }= {
     euclidian: this.heuristicEuclidian,
     manhattan: this.heuristicManhattan,
     chebyshev: this.heuristicChebyshev,
@@ -112,7 +112,7 @@ export class Graph<V = {x: number, y: number}, E = unknown> {
 
   // Sort of an A* implementation. Naming based on wikipedia pseudo code https://en.wikipedia.org/wiki/A*_search_algorithm
   // TODO remove debugging code
-  findPath(startId: VertexId, endId: VertexId, heuristic: Heuristics = 'euclidian',  g: Phaser.GameObjects.Graphics): PathfinderResult<V> {
+  findPath(startId: VertexId, endId: VertexId, heuristic: Heuristic = 'euclidian',  g: Phaser.GameObjects.Graphics): PathfinderResult<V> {
     console.time('getShortestPath');
     const start = this.vertices.get(startId);
     const goal = this.vertices.get(endId);

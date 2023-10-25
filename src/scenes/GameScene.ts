@@ -1,4 +1,4 @@
-import {SceneKeys} from '..';
+import {DEFAULT_WIDTH, DEFAULT_ZOOM, MAX_ZOOM, MIN_ZOOM, SceneKeys} from '..';
 import { Cell, City } from '../City';
 import { Collector } from '../structures/Collector';
 import { Network } from '../Network';
@@ -9,8 +9,8 @@ export default class GameScene extends Phaser.Scene {
   observer: Phaser.Events.EventEmitter = new Phaser.Events.EventEmitter();
   controls!: Phaser.Cameras.Controls.SmoothedKeyControl;
   gridSize: number = 40;
-  mapSizeX: number = 33 * 4;
-  mapSizeY: number = 33 * 4;
+  mapSizeX: number = 129;
+  mapSizeY: number = 129;
 
   worldData: Cell[][] = [];
   city!: City;
@@ -68,8 +68,8 @@ export default class GameScene extends Phaser.Scene {
   private setupCameraAndInput() {
     // CAMERA STUFF
     const camera = this.cameras.main;
-    camera.setZoom(1);
-    camera.setBackgroundColor(0x333333);
+    const resolutionMod = this.cameras.main.width / DEFAULT_WIDTH;
+    camera.setZoom(DEFAULT_ZOOM * resolutionMod);    camera.setBackgroundColor(0x333333);
     camera.centerOnX(this.gridSize * this.mapSizeX / 2);
     camera.centerOnY(this.gridSize * this.mapSizeY / 2);
 
@@ -105,9 +105,10 @@ export default class GameScene extends Phaser.Scene {
       zoomOut: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.E),
       acceleration: 10,
       drag: 0.1,
-      maxSpeed: 0.5,
-      maxZoom: 4/3,
-      minZoom: 2/3,
+      maxSpeed: 0.75,
+      maxZoom: MAX_ZOOM,
+      minZoom: MIN_ZOOM,
+      zoomSpeed: 0.05,
     });
 
     keyR.onDown = evt => {

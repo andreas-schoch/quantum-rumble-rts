@@ -23,10 +23,10 @@ export class Network {
     const start = this.placeNode(0, 0);
     const end = this.placeNode(this.scene.mapSizeX - 1, this.scene.mapSizeY - 1);
 
-    for (let y = 2; y < this.scene.mapSizeY - 2; y += 3) {
-      for (let x = 2; x < this.scene.mapSizeX - 2; x += 3) {
-        if (x > 10 && x < 20 && y > 10 && y < 20) continue;
-        if (x > 25 && x < 30 && y > 25 && y < 30) continue;
+    for (let y = 2; y < this.scene.mapSizeY - 2; y += 4) {
+      for (let x = 2; x < this.scene.mapSizeX - 2; x += 4) {
+        // if (x > 10 && x < 20 && y > 10 && y < 20) continue;
+        // if (x > 25 && x < 30 && y > 25 && y < 30) continue;
         const XRand = Math.abs(Math.floor(Math.random() * this.scene.mapSizeX - 2));
         const YRand = Math.abs(Math.floor(Math.random() * this.scene.mapSizeY - 2));
         this.placeNode(XRand, YRand);
