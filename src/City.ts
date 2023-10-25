@@ -1,6 +1,8 @@
 import { Collector } from './structures/Collector';
 import { Weapon } from './structures/Weapon';
 import GameScene from './scenes/GameScene';
+import { GRID, WORLD_DATA } from '.';
+import { Structure } from './structures/BaseStructure';
 
 export interface Energy {
   follower: Phaser.GameObjects.PathFollower;
@@ -14,93 +16,74 @@ export interface Cell {
 }
 
 export interface EnergyRequest {
+  id: string;
   type: 'ammo' | 'energy';
   amount: number;
-  requester: Weapon | Collector;
+  requester: Structure;
 }
 
 export class City {
+  id: string;
+  x: number;
+  y: number;
   private scene: GameScene;
   private networkSpeed = 100;
   // private energyRequestQueue: [] = [];
   // TODO use a priority queue so structures with lower energy, health or ammo are prioritized
-  queue: Phaser.Structs.ProcessQueue<EnergyRequest> = new Phaser.Structs.ProcessQueue<EnergyRequest>();
+  private readonly queue: EnergyRequest[] = [];
 
   flowingEnergy: Map<string, Energy> = new Map();
   path: Phaser.Curves.Path;
   points: number[];
+  coordX: number;
+  coordY: number;
+  range: number = 5;
 
-  constructor(scene: GameScene, x: number, y: number) {
+  constructor(scene: GameScene, coordX: number, coordY: number) {
+    this.id = Math.random().toString(36).substring(2, 10);
+    this.x = coordX * GRID;
+    this.y = coordY * GRID;
+    this.coordX = coordX;
+    this.coordY = coordY;
     this.scene = scene;
-    const grid = this.scene.gridSize;
+    this.scene.add.sprite(this.x - GRID, this.y - GRID, 'city').setDepth(12).setOrigin(0, 0);
 
-    const city = this.scene.add.graphics();
-    // outer
-    city.fillStyle(0xd3d3d3, 1);
-    city.lineStyle(2, 0x000000 , 1);
-    city.fillRoundedRect(0, 0, grid * 3, grid * 3, grid * 0.4);
-    city.strokeRoundedRect(0, 0, grid * 3, grid * 3, grid * 0.4);
-    // inner
-    city.fillStyle(0xffffff, 1);
-    city.fillRoundedRect(grid * 0.25, grid * 0.25, grid * 2.5, grid * 2.5, grid * 0.25);
-    city.strokeRoundedRect(grid * 0.25, grid * 0.25, grid * 2.5, grid * 2.5, grid * 0.25);
+    scene.network.placeStructure(this.x, this.y, this);
 
-    city.setDepth(10);
-    city.generateTexture('city', grid * 3, grid * 3);
-    city.destroy();
-    this.scene.add.sprite((grid * x) - grid, (grid * y) - grid, 'city').setDepth(12).setOrigin(0, 0);
+    // this.scene.time.addEvent({
+    //   delay: 1000 / 2, // executes 20 times per second
+    //   callback: this.handleEnergy,
+    //   callbackScope: this,
+    //   loop: true
+    // });
+  }
 
-    const radius = 8;
-    const strokeWidth = 1.5;
-    const circle = this.scene.add.graphics({ lineStyle: { width: strokeWidth, color: 0x0000 }, fillStyle: { color: 0xd3d3d3 } });
-    circle.fillCircle(radius, radius, radius); // Adjust the radius as needed
-    circle.strokeCircle(radius, radius, radius - (strokeWidth / 2)); // Adjust the radius as needed
-    circle.generateTexture('energy', radius * 2, radius * 2); // Adjust the size as needed
+  requestEnergy(request: EnergyRequest) {
+    this.queue.push(request);
+  }
 
-    const coords: number[] = [
-      2.5, 13.5,
-      6, 13,
-      6, 15,
-      7, 14,
-      8, 12,
-      9, 13,
-      9, 10,
-      10, 11,
-      17, 12,
-      18, 10,
-      18, 5,
-      19, 5,
-      20, 17,
-      30, 20,
-      37, 2
-    ];
-
-    this.points = coords.map(coord => coord * grid);
-
-    this.path = new Phaser.Curves.Path(this.points[0], this.points[1]);
-    for (let i = 2; i < this.points.length; i += 2) this.path.lineTo(this.points[i] + (grid / 2), this.points[i + 1] + (grid / 2));
-    const network = this.scene.add.graphics();
-    network.lineStyle(6, 0x000000, 1);
-    this.path.draw(network, 1);
-    network.lineStyle(3, 0xffffff, 1);
-    this.path.draw(network, 1);
-
-    //////////////////////////////////////////////////
-
-    // for (let i = 2; i < this.points.length; i += 2) new Collector(this.scene, this.points[i] / grid, this.points[i + 1] / grid);
-
-    this.scene.time.addEvent({
-      delay: 1000 / 2, // executes 20 times per second
-      callback: this.handleEnergy,
-      callbackScope: this,
-      loop: true
-    });
+  getNeighboursInRange(range: number = this.range, occupiedOnly = true): Cell[] {
+    const cells: Cell[] = [];
+    for (let y = this.coordY - range; y <= this.coordY + range; y++) {
+      for (let x = this.coordX - range; x <= this.coordX + range; x++) {
+        if (x < 0 || y < 0 || x >= WORLD_DATA[0].length || y >= WORLD_DATA.length) continue; // skip out of bounds
+        const cell = WORLD_DATA[y][x];
+        if (occupiedOnly && !cell.ref) continue; // skip unoccupied cells only when desired
+        if (cell.ref === this) continue; // skip self
+        const distance = Math.abs(x - this.coordX) + Math.abs(y - this.coordY); // manhattan distance, not euclidean
+        if (distance > range) continue; // skip cells that are out of range
+        cells.push(cell);
+      }
+    }
+    return cells;
   }
 
   handleEnergy() {
-    // console.log('-----------handle energy');
+    if (this.queue.length === 0) return;
+    const request = this.queue.shift()!;
+    const path = request?.requester.path;
 
-    const pathLength = this.path.getLength();
+    const pathLength = path.getLength();
     const speed = 50; // units per second
     const duration = (pathLength / speed) * 1000; // convert to milliseconds
 
@@ -111,6 +94,30 @@ export class City {
     energyBall.follower.startFollow({duration, repeat: 0, onComplete: () => {
       energyBall.follower.destroy();
       this.flowingEnergy.delete(energyBall.id);
+      request.requester.receiveEnergy(request.amount, request.id);
     }});
+  }
+
+  static generateTextures(scene: Phaser.Scene): void {
+    const city = scene.add.graphics();
+    // outer
+    city.fillStyle(0xd3d3d3, 1);
+    city.lineStyle(2, 0x000000 , 1);
+    city.fillRoundedRect(0, 0, GRID * 3, GRID * 3, GRID * 0.4);
+    city.strokeRoundedRect(1, 1, GRID * 3 - 2, GRID * 3 - 2, GRID * 0.4);
+    // inner
+    city.fillStyle(0xffffff, 1);
+    city.fillRoundedRect(GRID * 0.25, GRID * 0.25, GRID * 2.5, GRID * 2.5, GRID * 0.25);
+    city.strokeRoundedRect(GRID * 0.25, GRID * 0.25, GRID * 2.5, GRID * 2.5, GRID * 0.25);
+    city.generateTexture('city', GRID * 3, GRID * 3);
+    city.destroy();
+
+    const radius = 8;
+    const strokeWidth = 1.5;
+    const circle = scene.add.graphics({ lineStyle: { width: strokeWidth, color: 0x0000 }, fillStyle: { color: 0xd3d3d3 } });
+    circle.fillCircle(radius, radius, radius); // Adjust the radius as needed
+    circle.strokeCircle(radius, radius, radius - (strokeWidth / 2)); // Adjust the radius as needed
+    circle.generateTexture('energy', radius * 2, radius * 2); // Adjust the size as needed
+    circle.destroy();
   }
 }

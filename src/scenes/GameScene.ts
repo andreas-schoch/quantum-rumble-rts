@@ -1,64 +1,58 @@
-import {DEFAULT_WIDTH, DEFAULT_ZOOM, MAX_ZOOM, MIN_ZOOM, SceneKeys} from '..';
+import {DEFAULT_WIDTH, DEFAULT_ZOOM, GRID, MAX_ZOOM, MIN_ZOOM, STRUCTURE_BY_NAME, SceneKeys, WORLD_DATA, WORLD_X, WORLD_Y} from '..';
 import { Cell, City } from '../City';
-import { Collector } from '../structures/Collector';
 import { Network } from '../Network';
+import { Structure } from '../structures/BaseStructure';
+import { Collector } from '../structures/Collector';
 import { Weapon } from '../structures/Weapon';
 
 type CameraRotations = '0' | '90' | '180' | '270';
 export default class GameScene extends Phaser.Scene {
   observer: Phaser.Events.EventEmitter = new Phaser.Events.EventEmitter();
   controls!: Phaser.Cameras.Controls.SmoothedKeyControl;
-  gridSize: number = 40;
-  mapSizeX: number = 129;
-  mapSizeY: number = 129;
-
-  worldData: Cell[][] = [];
   city!: City;
   network!: Network;
-
-  private selectedStructure: 'Collector' | 'Weapon' | null = null;
-  private structures = {[Weapon.name]: Weapon, [Collector.name]: Collector};
+  private selectedStructure: Structure['name'] | null = null; // TODO fix this
 
   constructor() {
     super({key: SceneKeys.GAME_SCENE});
-    for (let y = 0; y < this.mapSizeY; y++) {
+    for (let y = 0; y < WORLD_Y; y++) {
       const row : Cell[]= [];
-      for (let x = 0; x < this.mapSizeX; x++) {
+      for (let x = 0; x < WORLD_X; x++) {
         row.push({x, y, ref: null});
       }
-      this.worldData.push(row);
+      WORLD_DATA.push(row);
     }
 
-    console.log('worldData', this.worldData);
+    console.log('worldData', WORLD_DATA);
   }
 
   private create() {
     this.setupCameraAndInput();
     this.observer.removeAllListeners();
     this.network = new Network(this);
-    this.city = new City(this, Math.floor(this.mapSizeX / 2), Math.floor(this.mapSizeY / 2));
+    this.city = new City(this, Math.floor(WORLD_X / 2), Math.floor(WORLD_Y / 2));
 
     const graphics = this.add.graphics();
     graphics.fillStyle(0xffffff, 1);
     graphics.lineStyle(1, 0xcccccc, 1);
-    graphics.fillRect(0, 0, this.gridSize, this.gridSize);
-    graphics.strokeRect(0, 0, this.gridSize, this.gridSize);
-    graphics.generateTexture('cell_white', this.gridSize, this.gridSize);
+    graphics.fillRect(0, 0, GRID, GRID);
+    graphics.strokeRect(0, 0, GRID, GRID);
+    graphics.generateTexture('cell_white', GRID, GRID);
     graphics.clear();
-    this.add.tileSprite(0, 0, this.gridSize * this.mapSizeX,this.gridSize * this.mapSizeY, 'cell_white').setOrigin(0, 0);
+    this.add.tileSprite(0, 0, GRID * WORLD_X,GRID * WORLD_Y, 'cell_white').setOrigin(0, 0);
 
     graphics.fillStyle(0xe2ffe9, 1);
     graphics.lineStyle(1, 0x888888, 1);
-    graphics.fillRect(0, 0, this.gridSize, this.gridSize);
-    graphics.strokeRect(0, 0, this.gridSize, this.gridSize);
-    graphics.generateTexture('cell_green', this.gridSize, this.gridSize);
+    graphics.fillRect(0, 0, GRID, GRID);
+    graphics.strokeRect(0, 0, GRID, GRID);
+    graphics.generateTexture('cell_green', GRID, GRID);
     graphics.destroy();
 
-    new Weapon(this, 18, 2);
-    new Weapon(this, 19, 3);
-    new Weapon(this, 20, 2);
-    new Weapon(this, 21, 3);
-    new Weapon(this, 22, 2);
+    // new Weapon(this, 18, 2);
+    // new Weapon(this, 19, 3);
+    // new Weapon(this, 20, 2);
+    // new Weapon(this, 21, 3);
+    // new Weapon(this, 22, 2);
   }
 
   update(time: number, delta: number) {
@@ -70,8 +64,8 @@ export default class GameScene extends Phaser.Scene {
     const camera = this.cameras.main;
     const resolutionMod = this.cameras.main.width / DEFAULT_WIDTH;
     camera.setZoom(DEFAULT_ZOOM * resolutionMod);    camera.setBackgroundColor(0x333333);
-    camera.centerOnX(this.gridSize * this.mapSizeX / 2);
-    camera.centerOnY(this.gridSize * this.mapSizeY / 2);
+    camera.centerOnX(GRID * WORLD_X / 2);
+    camera.centerOnY(GRID * WORLD_Y / 2);
 
     // KEYBOARD STUFF
     let cameraRotationDeg = 0;
@@ -125,8 +119,8 @@ export default class GameScene extends Phaser.Scene {
       this.controls.right = rotKeyMap[String(cameraRotationDeg) as CameraRotations][3];
     };
 
-    keyONE.onDown = () => this.selectedStructure = 'Collector';
-    keyTWO.onDown = () => this.selectedStructure = 'Weapon';
+    keyONE.onDown = () => this.selectedStructure = Collector.name;
+    keyTWO.onDown = () => this.selectedStructure = Weapon.name;
     keyESC.onDown = () => this.selectedStructure = null;
     keyX.onDown = () => this.selectedStructure = null;
 
@@ -144,10 +138,13 @@ export default class GameScene extends Phaser.Scene {
 
     input.on('pointerdown', (p: Phaser.Input.Pointer) => {
       const { worldX, worldY } = p;
-      const coordX = Math.floor(worldX / this.gridSize);
-      const coordY = Math.floor(worldY / this.gridSize);
-      console.log('pointerdown', coordX, coordY);
-      this.network.placeNode(coordX, coordY);
+      const coordX = Math.floor(worldX / GRID);
+      const coordY = Math.floor(worldY / GRID);
+      console.log('pointerdown', coordX, coordY, this.selectedStructure);
+      if (this.selectedStructure === null) return;
+      const structure = new STRUCTURE_BY_NAME[this.selectedStructure](this, coordX, coordY);
+      console.log('------------new structure', structure);
+      this.network.placeStructure(coordX, coordY, structure);
     });
 
     input.on('wheel', (pointer: Phaser.Input.Pointer, gameObjects: unknown[], deltaX: number, deltaY: number) => {

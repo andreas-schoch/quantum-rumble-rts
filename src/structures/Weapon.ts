@@ -1,9 +1,14 @@
-import { Cell, City, EnergyRequest } from '../City';
-import { Collector } from './Collector';
+import { Cell, EnergyRequest } from '../City';
 import GameScene from '../scenes/GameScene';
+import { GRID, HALF_GRID, WORLD_DATA } from '..';
+import { EnergyReceiver } from './BaseStructure';
 
-export class Weapon {
+export class Weapon implements EnergyReceiver {
+  id: string;
+  x: number;
+  y: number;
   name: string = 'Weapon';
+  path: Phaser.Curves.Path;
   private scene: GameScene;
   private graphics: Phaser.GameObjects.Graphics;
 
@@ -19,35 +24,47 @@ export class Weapon {
   private cooldown = 1000;
 
   constructor(scene: GameScene, coordX: number, coordY: number) {
+    this.id = Math.random().toString(36).substring(2, 10);
+    this.x = coordX * GRID + HALF_GRID;
+    this.y = coordY * GRID + HALF_GRID;
     this.scene = scene;
     this.coordX = coordX;
     this.coordY = coordY;
     this.graphics = scene.add.graphics();
     this.draw();
+
+    this.scene.city.requestEnergy({
+      id: Math.random().toString(36).substring(2, 9),
+      type: 'energy',
+      amount: 100,
+      requester: this
+    });
+  }
+
+  receiveEnergy(amount: number, requestId: string): void {
+    console.log('received energy', amount, requestId);
   }
 
   draw() {
-    const grid = this.scene.gridSize;
     const rotation = -45;
-
     this.graphics.clear();
-    this.graphics.setPosition((this.coordX * grid) - grid / 2, (this.coordY * grid) - grid / 2);
+    this.graphics.setPosition(this.x, this.y);
     this.graphics.setRotation(Phaser.Math.DegToRad(rotation));
     this.graphics.lineStyle(2, 0x000000, 1);
     // background
     this.graphics.fillStyle(0xd3d3d3  , 1);
-    this.drawStar(0, 0, 4, grid * 0.6, grid * 0.3);
-    this.graphics.fillCircle(0, 0, grid * 0.4);
+    this.drawStar(0, 0, 4, GRID * 0.6, GRID * 0.3);
+    this.graphics.fillCircle(0, 0, GRID * 0.4);
     // progressbar
     this.graphics.fillStyle(0xff0000, 1);
     const degrees = 360 * (this.currentAmmo / this.totalAmmo);
-    this.graphics.slice(0, 0, grid * 0.4, Phaser.Math.DegToRad(rotation), Phaser.Math.DegToRad(rotation + degrees));
+    this.graphics.slice(0, 0, GRID * 0.4, Phaser.Math.DegToRad(rotation), Phaser.Math.DegToRad(rotation + degrees));
     this.graphics.fillPath();
-    this.graphics.strokeCircle(0, 0, grid * 0.4);
+    this.graphics.strokeCircle(0, 0, GRID * 0.4);
     // inside
     this.graphics.fillStyle(0xffffff, 2);
-    this.graphics.fillCircle(0, 0, grid * 0.2);
-    this.graphics.strokeCircle(0, 0, grid * 0.2);
+    this.graphics.fillCircle(0, 0, GRID * 0.2);
+    this.graphics.strokeCircle(0, 0, GRID * 0.2);
     this.graphics.setDepth(12);
   }
 
@@ -67,8 +84,8 @@ export class Weapon {
 
     for (let y = this.coordY - this.attackRange; y <= this.coordY + this.attackRange; y++) {
       for (let x = this.coordX - this.attackRange; x <= this.coordX + this.attackRange; x++) {
-        if (x < 0 || y < 0 || x >= this.scene.worldData.length || y >= this.scene.worldData[0].length) continue; // skip out of bounds
-        const cell = this.scene.worldData[x][y];
+        if (x < 0 || y < 0 || x >= WORLD_DATA.length || y >= WORLD_DATA[0].length) continue; // skip out of bounds
+        const cell = WORLD_DATA[y][x];
         if (!cell.ref) continue; // skip empty cells
         const distance = Math.abs(x - this.coordX) + Math.abs(y - this.coordY); // manhattan distance, not euclidean
         if (distance > this.attackRange) continue; // skip cells that are out of range
@@ -121,5 +138,10 @@ export class Weapon {
     this.graphics.closePath();
     this.graphics.fillPath();
     this.graphics.strokePath();
+  }
+
+  static generateTextures(): void {
+    // TODO generate the dynamic red ammo texture as a spritesheet animation
+
   }
 }

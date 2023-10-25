@@ -1,7 +1,7 @@
-type EdgeId = string;
-type VertexId = string;
+export type EdgeId = string;
+export type VertexId = string;
 
-interface Edge<T = unknown> {
+export interface Edge<T = unknown> {
   id: EdgeId;
   vertA: VertexId;
   vertB: VertexId;
@@ -9,20 +9,20 @@ interface Edge<T = unknown> {
   data: T;
 }
 
-interface Vertex<T = unknown> {
+export interface Vertex<T = unknown> {
   x: number;
   y: number;
   id: VertexId;
   data: T;
 }
 
-interface PathfinderResult<V = unknown> {
+export interface PathfinderResult<V = unknown> {
   distance: number;
   path: Vertex<V>[];
   found: boolean;
 }
 
-type Heuristic = 'euclidian' | 'manhattan' | 'chebyshev' | 'octile';
+export type Heuristic = 'euclidian' | 'manhattan' | 'chebyshev' | 'octile';
 
 // Custom Graph implementation loosely based on "graph-typed" interface (npm package)
 // TODO remove debugging code and write unit tests
