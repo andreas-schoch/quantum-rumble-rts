@@ -3,7 +3,8 @@ import GameScene from './scenes/GameScene';
 import PreloadScene from './scenes/PreloadScene';
 import { Weapon } from './structures/Weapon';
 import { Collector } from './structures/Collector';
-import { Cell } from './City';
+import { Cell, City } from './City';
+import { Relay } from './structures/Relay';
 
 export const SETTINGS_KEY_RESOLUTION = 'quantum_rumble_resolution';
 
@@ -20,7 +21,12 @@ export const WORLD_X = 129;
 export const WORLD_Y = 129;
 export const WORLD_DATA: Cell[][] = []; // TODO maybe temporary until deciding weather to merge with graph (use vertices as cells)
 
-export const STRUCTURE_BY_NAME = {[Weapon.name]: Weapon, [Collector.name]: Collector};
+export const STRUCTURE_BY_NAME = {
+  [Weapon.name]: Weapon,
+  [Collector.name]: Collector,
+  [City.name]: City,
+  [Relay.name]: Relay,
+};
 
 export const enum SceneKeys {
   PRELOAD_SCENE = 'PreloadScene',

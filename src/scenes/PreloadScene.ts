@@ -1,6 +1,7 @@
 import {SceneKeys} from '..';
 import { City } from '../City';
 import { Collector } from '../structures/Collector';
+import { Relay } from '../structures/Relay';
 import { Weapon } from '../structures/Weapon';
 
 export default class PreloadScene extends Phaser.Scene {
@@ -16,6 +17,7 @@ export default class PreloadScene extends Phaser.Scene {
 
     City.generateTextures(this);
     Collector.generateTextures(this);
+    Relay.generateTextures(this);
     Weapon.generateTextures();
     this.scene.start(SceneKeys.GAME_SCENE);
   }

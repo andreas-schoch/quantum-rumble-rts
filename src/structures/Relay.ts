@@ -2,23 +2,15 @@ import { GRID, HALF_GRID, WORLD_DATA } from '..';
 import GameScene from '../scenes/GameScene';
 import { BaseStructure } from './BaseStructure';
 
-export class Collector extends BaseStructure {
-  name = 'Collector';
+export class Relay extends BaseStructure {
+  name = 'Relay';
   relay = true;
-  connectionRange = 5;
+  connectionRange = 10;
 
   constructor(scene: GameScene, coordX: number, coordY: number) {
     super(scene, coordX, coordY);
     this.relay = true;
-    this.scene.add.sprite(this.x, this.y, 'collector').setDepth(12);
-    // WORLD_DATA[this.coordY][this.coordX].ref = this;
-
-    // this.scene.city.requestEnergy({
-    //   id: Math.random().toString(36).substring(2, 9),
-    //   type: 'energy',
-    //   amount: 100,
-    //   requester: this
-    // });
+    this.scene.add.sprite(this.x, this.y, 'relay').setDepth(12);
   }
 
   receiveEnergy(amount: number, requestId: string): void {
@@ -32,16 +24,12 @@ export class Collector extends BaseStructure {
 
   static generateTextures(scene: Phaser.Scene) {
     const graphics = scene.add.graphics();
-    const outer = GRID * 0.30;
-    const inner = outer / 2;
     graphics.fillStyle(0xd3d3d3, 1);
     graphics.lineStyle(2, 0x777777, 1);
-    graphics.fillCircle(HALF_GRID, HALF_GRID, outer);
-    graphics.strokeCircle(HALF_GRID, HALF_GRID, outer);
+    BaseStructure.drawStar(graphics, HALF_GRID, HALF_GRID * 1.15, 3, GRID * 0.4, GRID * 0.2);
     graphics.fillStyle(0xffffff, 1);
-    graphics.fillCircle(HALF_GRID, HALF_GRID, inner);
-    graphics.strokeCircle(HALF_GRID, HALF_GRID, inner);
-    graphics.generateTexture('collector', GRID, GRID);
+    BaseStructure.drawStar(graphics, HALF_GRID, HALF_GRID * 1.15, 3, GRID * 0.2, GRID * 0.1);
+    graphics.generateTexture('relay', GRID, GRID);
     graphics.destroy();
   }
 }

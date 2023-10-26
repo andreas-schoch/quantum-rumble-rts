@@ -1,8 +1,9 @@
 import {DEFAULT_WIDTH, DEFAULT_ZOOM, GRID, MAX_ZOOM, MIN_ZOOM, STRUCTURE_BY_NAME, SceneKeys, WORLD_DATA, WORLD_X, WORLD_Y} from '..';
 import { Cell, City } from '../City';
 import { Network } from '../Network';
-import { Structure } from '../structures/BaseStructure';
+import { BaseStructure } from '../structures/BaseStructure';
 import { Collector } from '../structures/Collector';
+import { Relay } from '../structures/Relay';
 import { Weapon } from '../structures/Weapon';
 
 type CameraRotations = '0' | '90' | '180' | '270';
@@ -11,7 +12,8 @@ export default class GameScene extends Phaser.Scene {
   controls!: Phaser.Cameras.Controls.SmoothedKeyControl;
   city!: City;
   network!: Network;
-  private selectedStructure: Structure['name'] | null = null; // TODO fix this
+
+  private structureToBuild: BaseStructure['name'] | null = null; // TODO fix this
 
   constructor() {
     super({key: SceneKeys.GAME_SCENE});
@@ -79,6 +81,7 @@ export default class GameScene extends Phaser.Scene {
     const keyR = keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.R);
     const keyONE = keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.ONE);
     const keyTWO = keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.TWO);
+    const keyTHREE = keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.THREE);
     const keyESC = keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.ESC);
     const keyX = keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.X);
 
@@ -119,10 +122,11 @@ export default class GameScene extends Phaser.Scene {
       this.controls.right = rotKeyMap[String(cameraRotationDeg) as CameraRotations][3];
     };
 
-    keyONE.onDown = () => this.selectedStructure = Collector.name;
-    keyTWO.onDown = () => this.selectedStructure = Weapon.name;
-    keyESC.onDown = () => this.selectedStructure = null;
-    keyX.onDown = () => this.selectedStructure = null;
+    keyONE.onDown = () => this.structureToBuild = Collector.name;
+    keyTWO.onDown = () => this.structureToBuild = Weapon.name;
+    keyTHREE.onDown = () => this.structureToBuild = Relay.name;
+    keyESC.onDown = () => this.structureToBuild = null;
+    keyX.onDown = () => this.structureToBuild = null;
 
     // MOUSE AND POINTER STUFF
     const input = this.input;
@@ -131,6 +135,7 @@ export default class GameScene extends Phaser.Scene {
 
     input.on('pointermove', (p: Phaser.Input.Pointer) => {
       if (!p.isDown) return;
+      if (p.leftButtonDown()) return;
       const { x, y } = p.velocity;
       camera.scrollX -= x / camera.zoom;
       camera.scrollY -= y / camera.zoom;
@@ -140,11 +145,10 @@ export default class GameScene extends Phaser.Scene {
       const { worldX, worldY } = p;
       const coordX = Math.floor(worldX / GRID);
       const coordY = Math.floor(worldY / GRID);
-      console.log('pointerdown', coordX, coordY, this.selectedStructure);
-      if (this.selectedStructure === null) return;
-      const structure = new STRUCTURE_BY_NAME[this.selectedStructure](this, coordX, coordY);
-      console.log('------------new structure', structure);
+      if (!this.structureToBuild) return;
+      const structure = new STRUCTURE_BY_NAME[this.structureToBuild](this, coordX, coordY);
       this.network.placeStructure(coordX, coordY, structure);
+      // else console.log('TODO implement select'); // TODO find structure under click and select it (show info about it in the UI)
     });
 
     input.on('wheel', (pointer: Phaser.Input.Pointer, gameObjects: unknown[], deltaX: number, deltaY: number) => {

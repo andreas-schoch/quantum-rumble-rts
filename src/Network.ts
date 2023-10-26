@@ -1,15 +1,16 @@
 import GameScene from './scenes/GameScene';
-import { Collector } from './structures/Collector';
 import { Graph } from './Graph';
-import { Structure, getNeighboursInRange as getCellsInRange } from './structures/BaseStructure';
+import { BaseStructure, getCellsInRange } from './structures/BaseStructure';
 import { City } from './City';
 
 export class Network {
   scene: GameScene;
   graphics: Phaser.GameObjects.Graphics;
-  graph: Graph<Structure | City, Phaser.GameObjects.Sprite> = new Graph();
+  graph: Graph<BaseStructure, Phaser.GameObjects.Sprite> = new Graph();
   renderTexture: Phaser.GameObjects.RenderTexture;
   textureKeysEdge: Set<string> = new Set();
+  // in future iterations this will be a list of "energyStorage" structures
+  root: City | null = null;
 
   constructor(scene: GameScene) {
     this.scene = scene;
@@ -51,41 +52,46 @@ export class Network {
     // }, 3000);
   }
 
-  placeStructure(coordX: number, coordY: number, ref: Structure | City): string {
-    // const collector = new Collector(this.scene, coordX, coordY);
+  placeStructure(coordX: number, coordY: number, ref: BaseStructure): string {
     this.graph.createVertex(ref.id, ref.x, ref.y, ref);
-
-    // TODO this may be inconsistent with when structures have different radii
-    // TODO consider merging the concept of Cells and Vertices. Just place Vertices without Edges
-    getCellsInRange(coordX, coordY, 5).forEach(cell => {
-      if (!cell.ref) return;
-      if (cell.ref.id === ref.id) return;
-      if (!(cell.ref instanceof Collector)) return; // The only structure that can be connected to is a Collector
-      const distance = Math.sqrt(Math.pow(ref.x - cell.ref.x, 2) + Math.pow(ref.y - cell.ref.y, 2));
-      const angle = Math.atan2(cell.ref.y - ref.y, cell.ref.x - ref.x);
-      // console.log('angle', angle);
-      const key = `line-${Math.round(distance)}`;
-
-      if (!this.textureKeysEdge.has(key)) {
-        console.log('--------------create texture', key);
-        this.graphics.fillStyle(0xbbbbbb, 1);
-        this.graphics.fillRect(0, 0, distance, 6);
-        this.graphics.fillStyle(0xffffff, 1);
-        this.graphics.fillRect(0, 0 + 2, distance, 2);
-        this.graphics.generateTexture(key, distance, 6);
-        this.graphics.clear();
-        this.textureKeysEdge.add(key);
-      }
-
-      const sprite = this.scene.add.sprite(ref.x, ref.y, key).setDepth(10).setOrigin(0, 0.5);
-      sprite.rotation = angle;
-      this.graph.createEdge(ref.id, cell.ref.id, distance, sprite);
-    });
-    // console.log(this.graph.vertices.size, this.graph.edges.size, this.graph.edgesByVertex);
+    console.log('placeStructure', ref);
+    if (ref instanceof City) this.root = ref;
+    this.connect(coordX, coordY, ref);
     return ref.id;
   }
 
-  removeNode(id: string) {
+  private connect(coordX: number, coordY: number, ref: BaseStructure) {
+    for (const [cell, manhattanDistance] of getCellsInRange(coordX, coordY, ref.connectionRange)) {
+      if (!cell.ref) continue;
+      if (!cell.ref.relay && !ref.relay) continue; // non-relay structures cannot connect to each other
+      if (cell.ref.id === ref.id) continue;
+      if (manhattanDistance > cell.ref.connectionRange) continue; // won't connect if neighbour has a smaller connection range
+      const euclideanDistance = Math.sqrt(Math.pow(ref.x - cell.ref.x, 2) + Math.pow(ref.y - cell.ref.y, 2));
+      this.graph.createEdge(ref.id, cell.ref.id, euclideanDistance, this.createEdgeSprite(ref, cell.ref, euclideanDistance));
+    }
+  }
+
+  private createEdgeSprite(placedStructure: BaseStructure, connectingStructure: BaseStructure, euclideanDistance: number) {
+    const angle = Math.atan2(connectingStructure.y - placedStructure.y, connectingStructure.x - placedStructure.x);
+    const key = `line-${Math.round(euclideanDistance)}`;
+
+    if (!this.textureKeysEdge.has(key)) {
+      console.log('--------------create texture', key);
+      this.graphics.fillStyle(0xbbbbbb, 1);
+      this.graphics.fillRect(0, 0, euclideanDistance, 6);
+      this.graphics.fillStyle(0xffffff, 1);
+      this.graphics.fillRect(0, 0 + 2, euclideanDistance, 2);
+      this.graphics.generateTexture(key, euclideanDistance, 6);
+      this.graphics.clear();
+      this.textureKeysEdge.add(key);
+    }
+
+    const sprite = this.scene.add.sprite(placedStructure.x, placedStructure.y, key).setDepth(10).setOrigin(0, 0.5);
+    sprite.rotation = angle;
+    return sprite;
+  }
+
+  removeStructure(id: string) {
     const vert = this.graph.vertices.get(id);
     if (!vert) return;
 
