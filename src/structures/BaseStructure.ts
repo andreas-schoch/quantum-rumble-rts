@@ -5,12 +5,10 @@ import GameScene from '../scenes/GameScene';
 
 export const getCellsInRange = (coordX: number, coordY: number, range: number, occupiedOnly = true) => {
   const cells: [Cell, number][] = [];
-  // console.log('-----getNeighboursInRange-----', coordX, coordY, range);
   for (let y = coordY - range; y <= coordY + range; y++) {
     for (let x = coordX - range; x <= coordX + range; x++) {
       if (x < 0 || y < 0 || x >= WORLD_DATA[0].length || y >= WORLD_DATA.length) continue; // skip out of bounds
       const cell = WORLD_DATA[y][x];
-      // console.log('x', x, 'y', y, cell);
       if (occupiedOnly && !cell.ref) continue; // skip unoccupied cells only when desired
       if (cell.ref === this) continue; // skip self
       const distance = Math.abs(x - coordX) + Math.abs(y - coordY); // manhattan distance, not euclidean
@@ -19,7 +17,6 @@ export const getCellsInRange = (coordX: number, coordY: number, range: number, o
     }
   }
 
-  // console.log('cells', cells);
   return cells;
 };
 
@@ -70,8 +67,6 @@ export abstract class BaseStructure {
     this.y = coordY * GRID + HALF_GRID;
     this.coordX = coordX;
     this.coordY = coordY;
-    BaseStructure.structuresById.set(this.id, this);
-    WORLD_DATA[this.coordY][this.coordX].ref = this;
   }
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -101,16 +96,12 @@ export abstract class BaseStructure {
   }
 
   activate() {
+    WORLD_DATA[this.coordY][this.coordX].ref = this;
+    this.sprite && this.sprite.clearTint();
     BaseStructure.activeStructureIds.add(this.id);
     BaseStructure.structuresInUpdatePriorityOrder.push(this);
     BaseStructure.structuresInUpdatePriorityOrder.sort((a, b) => b.updatePriority - a.updatePriority);
-    // if (this.energyCollectionRange) this.scene.network.startCollecting(this);
-
-    console.log('activate', this.energyProduction);
-    if (!this.energyProduction){
-      this.energyPath = this.scene.network.findPathToEnergySource(this);
-      console.log('-------------energyPath', this.energyPath);
-    }
+    if (!this.energyProduction) this.energyPath = this.scene.network.findPathToEnergySource(this);
   }
 
   deactivate() {
@@ -130,8 +121,6 @@ export abstract class BaseStructure {
     this.pendingEnergyRequests[request.type] = this.pendingEnergyRequests[request.type].filter(r => r.id !== request.id);
     if (!request) throw new Error('This structure does not have a pending energy request with that id');
 
-    // console.log('received energy', amount, request, this);
-
     switch (request.type) {
     case 'ammo':
       this.ammoCurrent = Math.min(this.ammoCurrent + request.amount, this.ammoMax);
@@ -144,14 +133,6 @@ export abstract class BaseStructure {
       this.heal(request.amount);
       break;
     }
-
-    //   if (this.buildCostPaid < this.buildCost) {
-    //     this.buildCostPaid += amount;
-    //     if (this.buildCostPaid === this.buildCost) this.activate();
-    //     return;
-    //   }
-
-  //   console.log('received energy', amount, requestId);
   }
 
   requestEnergy(request: EnergyRequest): string {
@@ -160,26 +141,23 @@ export abstract class BaseStructure {
     if (!request.requester.energyPath.found) throw new Error('This structure is not connected to an energy source');
     const energyPath = request.requester.energyPath;
 
-    const speed = 150; // units per second
-    const duration = ( energyPath.distance / speed) * 1000; // convert to milliseconds
-
     const points = energyPath.path.reduce<number[]>((acc, cur) => acc.concat(cur.x, cur.y), []);
     const path = this.scene.add.path(points[0], points[1]);
     for (let i = 2; i < points.length; i += 2) path.lineTo(points[i], points[i + 1]);
 
-    const energyBall: Energy = {follower: this.scene.add.follower(path, points[0], points[1], 'energy'), id: this.generateId()};
-    console.log('energyBall', energyBall, 'energyRequest', request);
+    const texture = request.type === 'ammo' ? 'energy_red' : 'energy';
+    const duration = (energyPath.distance / this.scene.network.speed) * 1000;
+    const energyBall: Energy = {follower: this.scene.add.follower(path, points[0], points[1], texture), id: this.generateId()};
     energyBall.follower.setScale(1).setDepth(100);
     energyBall.follower.startFollow({duration, repeat: 0, onComplete: () => {
       energyBall.follower.destroy();
       request.requester.receiveEnergy(request);
     }});
 
-    // this.pendingEnergyRequests.push(request);
     return energyBall.id;
   }
 
-  destroy() {
+  protected destroy() {
     this.deactivate();
     this.destroyed = true;
     BaseStructure.structuresById.delete(this.id);
@@ -191,31 +169,31 @@ export abstract class BaseStructure {
     this.sprite?.destroy();
   }
 
-  heal(amount: number) {
+  protected heal(amount: number) {
     if (this.destroyed) throw new Error('This structure is already destroyed');
     this.healthCurrent = Math.min(this.healthCurrent + amount, this.healthMax);
     if (this.healthCurrent === this.healthMax) BaseStructure.damagedStructureIds.delete(this.id);
   }
 
-  build(amount: number) {
+  protected build(amount: number) {
     if (this.destroyed) throw new Error('This structure is already destroyed');
     this.buildCostPaid += amount;
     if (this.buildCostPaid >= this.buildCost) {
-      // this.buildCostPaid = 0;
-      // this.activate();
       if (this.energyCollectionRange) this.scene.network.startCollecting(this);
       BaseStructure.builtStructureIds.add(this.id);
       this.built = true;
-
       this.sprite?.setAlpha(1);
     }
   }
 
-  draw() {
-    // throw new Error('This method must be implemented by the child class');
+  protected draw() { /* no-op */ }
+
+  canMoveTo(coordX: number, coordY: number) {
+    return WORLD_DATA[coordY][coordX].ref === null || WORLD_DATA[coordY][coordX].ref === this;
   }
 
   move(coordX: number, coordY: number) {
+    if (WORLD_DATA[coordY][coordX].ref === this) return;
     if (!this.preview && (!this.movable || this.destroyed)) throw new Error('This structure is not movable or already destroyed');
     this.coordX = coordX;
     this.coordY = coordY;
@@ -224,13 +202,20 @@ export abstract class BaseStructure {
 
     if (this.sprite) this.sprite.setPosition(this.x, this.y);
 
+    const cellBefore = WORLD_DATA[this.coordY][this.coordX];
+    const cellAfter = WORLD_DATA[coordY][coordX];
+
     if (!this.preview) {
-      WORLD_DATA[this.coordY][this.coordX].ref = null;
-      WORLD_DATA[coordY][coordX].ref = this;
+      cellBefore.ref = null;
+      cellAfter.ref = this;
+    } else if (cellAfter.ref) {
+      this.sprite && this.sprite.setTint(0xff0000).setDepth(100);
+    } else {
+      this.sprite && this.sprite.clearTint().setDepth(12);
     }
   }
 
-  private generateId() {
+  protected generateId() {
     return Math.random().toString(36).substring(2, 10);
   }
 

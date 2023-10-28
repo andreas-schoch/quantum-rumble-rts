@@ -77,8 +77,6 @@ export class Graph<V = {x: number, y: number}, E = unknown> {
     return neighbours;
   }
 
-  ///////////////////////////////////////////////////////////
-
   createEdge(v1: VertexId, v2: VertexId, weight: number, data: E): Edge<E> {
     const edge = { id: `${v1}-${v2}`, vertA: v1, vertB: v2, weight, data };
     this.edges.set(edge.id, edge);
@@ -113,14 +111,10 @@ export class Graph<V = {x: number, y: number}, E = unknown> {
   // Sort of an A* implementation. Naming based on wikipedia pseudo code https://en.wikipedia.org/wiki/A*_search_algorithm
   // TODO remove debugging code
   findPath(startId: VertexId, endId: VertexId, heuristic: Heuristic = 'euclidian',  g: Phaser.GameObjects.Graphics | null = null): PathfinderResult<V> {
-    console.time('getShortestPath');
     const start = this.vertices.get(startId);
     const goal = this.vertices.get(endId);
     if (!goal || !start) return {distance: Infinity, path: [], found: false};
-    if (this.edgesByVertex.get(startId)?.length === 0 || this.edgesByVertex.get(endId)?.length === 0) {
-      console.timeEnd('getShortestPath');
-      return {distance: Infinity, path: [], found: false};
-    }
+    if (this.edgesByVertex.get(startId)?.length === 0 || this.edgesByVertex.get(endId)?.length === 0) return {distance: Infinity, path: [], found: false};
 
     const openSet: { value: Vertex<V>, fScore: number }[] = [];
     const closedSet: Set<Vertex<V>> = new Set();
@@ -131,9 +125,7 @@ export class Graph<V = {x: number, y: number}, E = unknown> {
     openSet.push({ value: start, fScore: this.heuristics[heuristic](start, goal) });
 
     let needsSorting = false;
-    let i = 0;
     while (openSet.length) {
-      i++;
       const current = openSet.pop()!.value;
       g && g.fillCircle(current.x, current.y, 20);
       if (current.id === endId) break;
@@ -141,7 +133,6 @@ export class Graph<V = {x: number, y: number}, E = unknown> {
 
       const currentEdges = this.edgesByVertex.get(current.id) || [];
       for (const edge of currentEdges) {
-        i++;
         const neighbour = this.vertices.get(edge.vertA === current.id ? edge.vertB : edge.vertA)!;
         const tentativeGScore = (gScore.get(current) || 0) + edge.weight;
 
@@ -164,11 +155,7 @@ export class Graph<V = {x: number, y: number}, E = unknown> {
     const path: Vertex<V>[] = [];
     let current = goal;
     while (current && current.id !== startId) {
-      if (!cameFrom.get(current)) {
-        console.timeEnd('getShortestPath');
-        console.log('getShortestPath', i);
-        return {distance: Infinity, path: [], found: false}; // No path found
-      }
+      if (!cameFrom.get(current)) return {distance: Infinity, path: [], found: false}; // No path found
       path.push(current);
       current = cameFrom.get(current)!;
     }
@@ -176,8 +163,6 @@ export class Graph<V = {x: number, y: number}, E = unknown> {
     path.reverse();
 
     const distance = gScore.get(goal);
-    console.timeEnd('getShortestPath');
-    console.log('getShortestPath', i);
     return distance ? {distance, path, found: true} : {distance: Infinity, path: [], found: false};
   }
 

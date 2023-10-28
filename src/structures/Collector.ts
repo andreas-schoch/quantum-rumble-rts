@@ -2,9 +2,6 @@ import { GRID, HALF_GRID } from '..';
 import GameScene from '../scenes/GameScene';
 import { BaseStructure } from './BaseStructure';
 
-// TODO consider turning into a "Claimer" whose only purpose is to claim land without relaying energy.
-//  Right now "Relay" is too similar to this. Once this diverges from being just a creeper world like game,
-//  I may want every structure to have specific purposes and keep their numbers limited
 export class Collector extends BaseStructure {
   name = 'Collector';
   relay = true;
@@ -26,37 +23,8 @@ export class Collector extends BaseStructure {
 
   constructor(scene: GameScene, coordX: number, coordY: number) {
     super(scene, coordX, coordY);
-    this.sprite = this.scene.add.sprite(this.x, this.y, 'collector').setDepth(12);
-    this.sprite.setAlpha(0.3);
-    // this.activate();
-    // WORLD_DATA[this.coordY][this.coordX].ref = this;
-
-    // this.scene.city.requestEnergy({
-    //   id: Math.random().toString(36).substring(2, 9),
-    //   type: 'energy',
-    //   amount: 100,
-    //   requester: this
-    // });
+    this.sprite = this.scene.add.sprite(this.x, this.y, 'collector').setDepth(12).setAlpha(0.3);
   }
-
-  // update(time: number, delta: number) {
-  //   if (this.destroyed || !this.energyPath.found) return;
-  //   if (this.buildCostPaid < this.buildCost) {
-  //     this.energyPath.path[0].data.ref?.receiveEnergy(this.energyCollectionRate * delta, this.id);
-  //     return;
-  //   }
-
-  // }
-
-  destroy() {
-    super.destroy();
-    this.sprite.destroy();
-  }
-
-  // destroy() {
-  //   WORLD_DATA[this.coordY][this.coordX].ref = null;
-  //   // this.graphics.destroy();
-  // }
 
   static generateTextures(scene: Phaser.Scene) {
     const graphics = scene.add.graphics();

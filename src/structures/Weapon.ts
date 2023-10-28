@@ -30,16 +30,49 @@ export class Weapon extends BaseStructure {
     super(scene, coordX, coordY);
     this.graphics = scene.add.graphics();
     this.draw();
-
-    // this.scene.city.requestEnergy({
-    //   id: Math.random().toString(36).substring(2, 9),
-    //   type: 'energy',
-    //   amount: 100,
-    //   requester: this
-    // });
   }
 
-  draw() {
+  move(coordX: number, coordY: number) {
+    super.move(coordX, coordY);
+    this.draw();
+  }
+
+  protected destroy(): void {
+    super.destroy();
+    this.graphics.destroy();
+  }
+
+  protected attack() {
+    if (this.ammoCurrent <= 0) return;
+    if (this.scene.game.getTime() - this.lastAttackTime > this.cooldown) return;
+    const nearestTarget = this.getNearestTarget();
+    if (!nearestTarget) return;
+    this.ammoCurrent--;
+    this.lastAttackTime = this.scene.game.getTime();
+    this.draw();
+  }
+
+  protected getNearestTarget(): Cell | null {
+    let nearest: Cell | null = null;
+    let nearestDistance = Infinity;
+
+    for (let y = this.coordY - this.attackRange; y <= this.coordY + this.attackRange; y++) {
+      for (let x = this.coordX - this.attackRange; x <= this.coordX + this.attackRange; x++) {
+        if (x < 0 || y < 0 || x >= WORLD_DATA.length || y >= WORLD_DATA[0].length) continue; // skip out of bounds
+        const cell = WORLD_DATA[y][x];
+        if (!cell.ref) continue; // skip empty cells
+        const distance = Math.abs(x - this.coordX) + Math.abs(y - this.coordY); // manhattan distance, not euclidean
+        if (distance > this.attackRange) continue; // skip cells that are out of range
+        if (distance < nearestDistance) {
+          nearest = cell;
+          nearestDistance = distance;
+        }
+      }
+    }
+    return nearest;
+  }
+
+  protected draw() {
     const rotation = -45;
     this.graphics.clear();
     this.graphics.setPosition(this.x, this.y);
@@ -60,47 +93,6 @@ export class Weapon extends BaseStructure {
     this.graphics.fillCircle(0, 0, GRID * 0.2);
     this.graphics.strokeCircle(0, 0, GRID * 0.2);
     this.graphics.setDepth(12);
-  }
-
-  attack() {
-    if (this.ammoCurrent <= 0) return;
-    if (this.scene.game.getTime() - this.lastAttackTime > this.cooldown) return;
-    const nearestTarget = this.getNearestTarget();
-    if (!nearestTarget) return;
-    this.ammoCurrent--;
-    this.lastAttackTime = this.scene.game.getTime();
-    this.draw();
-  }
-
-  getNearestTarget(): Cell | null {
-    let nearest: Cell | null = null;
-    let nearestDistance = Infinity;
-
-    for (let y = this.coordY - this.attackRange; y <= this.coordY + this.attackRange; y++) {
-      for (let x = this.coordX - this.attackRange; x <= this.coordX + this.attackRange; x++) {
-        if (x < 0 || y < 0 || x >= WORLD_DATA.length || y >= WORLD_DATA[0].length) continue; // skip out of bounds
-        const cell = WORLD_DATA[y][x];
-        if (!cell.ref) continue; // skip empty cells
-        const distance = Math.abs(x - this.coordX) + Math.abs(y - this.coordY); // manhattan distance, not euclidean
-        if (distance > this.attackRange) continue; // skip cells that are out of range
-        if (distance < nearestDistance) {
-          nearest = cell;
-          nearestDistance = distance;
-        }
-      }
-    }
-    return nearest;
-  }
-
-  onDamage(amount: number) {
-    this.healthMax -= amount;
-    if (this.healthMax <= 0) this.scene.observer?.emit('weapon_destroyed', this);
-  }
-
-  move(coordX: number, coordY: number) {
-    this.coordX = coordX;
-    this.coordY = coordY;
-    this.draw();
   }
 
   static generateTextures(): void {

@@ -1,4 +1,4 @@
-import { GRID, HALF_GRID, WORLD_DATA } from '..';
+import { GRID, HALF_GRID } from '..';
 import GameScene from '../scenes/GameScene';
 import { BaseStructure } from './BaseStructure';
 
@@ -21,12 +21,7 @@ export class Relay extends BaseStructure {
 
   constructor(scene: GameScene, coordX: number, coordY: number) {
     super(scene, coordX, coordY);
-    this.sprite = this.scene.add.sprite(this.x, this.y, 'relay').setDepth(12);
-  }
-
-  destroy() {
-    WORLD_DATA[this.coordY][this.coordX].ref = null;
-    // this.graphics.destroy();
+    this.sprite = this.scene.add.sprite(this.x, this.y, 'relay').setDepth(12).setAlpha(0.3);
   }
 
   static generateTextures(scene: Phaser.Scene) {
