@@ -112,7 +112,7 @@ export class Graph<V = {x: number, y: number}, E = unknown> {
 
   // Sort of an A* implementation. Naming based on wikipedia pseudo code https://en.wikipedia.org/wiki/A*_search_algorithm
   // TODO remove debugging code
-  findPath(startId: VertexId, endId: VertexId, heuristic: Heuristic = 'euclidian',  g: Phaser.GameObjects.Graphics): PathfinderResult<V> {
+  findPath(startId: VertexId, endId: VertexId, heuristic: Heuristic = 'euclidian',  g: Phaser.GameObjects.Graphics | null = null): PathfinderResult<V> {
     console.time('getShortestPath');
     const start = this.vertices.get(startId);
     const goal = this.vertices.get(endId);
@@ -135,7 +135,7 @@ export class Graph<V = {x: number, y: number}, E = unknown> {
     while (openSet.length) {
       i++;
       const current = openSet.pop()!.value;
-      g.fillCircle(current.x, current.y, 20);
+      g && g.fillCircle(current.x, current.y, 20);
       if (current.id === endId) break;
       needsSorting = false;
 

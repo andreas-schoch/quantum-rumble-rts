@@ -5,6 +5,7 @@ import { Weapon } from './structures/Weapon';
 import { Collector } from './structures/Collector';
 import { Cell, City } from './City';
 import { Relay } from './structures/Relay';
+import { BaseStructure } from './structures/BaseStructure';
 
 export const SETTINGS_KEY_RESOLUTION = 'quantum_rumble_resolution';
 
@@ -17,8 +18,8 @@ export const MIN_ZOOM: number = 1/3 * RESOLUTION_SCALE;
 
 export const GRID = 40;
 export const HALF_GRID = GRID / 2;
-export const WORLD_X = 129;
-export const WORLD_Y = 129;
+export const WORLD_X = 17;
+export const WORLD_Y = 17;
 export const WORLD_DATA: Cell[][] = []; // TODO maybe temporary until deciding weather to merge with graph (use vertices as cells)
 
 export const STRUCTURE_BY_NAME = {
@@ -42,6 +43,12 @@ const config: Phaser.Types.Core.GameConfig = {
     autoCenter: Phaser.Scale.CENTER_BOTH,
     width: DEFAULT_WIDTH * RESOLUTION_SCALE,
     height: DEFAULT_HEIGHT * RESOLUTION_SCALE,
+  },
+  fps: {
+    // target: 30,
+    // min: 24,
+    // forceSetTimeOut: true,
+    smoothStep: true
   },
   // canvas: document.getElementById('game') as HTMLCanvasElement,
   parent: 'game', // DON'T use canvas as it will lead to horizontal scrollbar with fullHD resolution

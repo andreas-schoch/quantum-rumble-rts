@@ -12,8 +12,13 @@ export default class GameScene extends Phaser.Scene {
   controls!: Phaser.Cameras.Controls.SmoothedKeyControl;
   city!: City;
   network!: Network;
+  private numTicks = 0;
 
-  private structureToBuild: BaseStructure['name'] | null = null; // TODO fix this
+  private structureToBuild: string | null = null; // TODO fix this
+  pointerX: number;
+  pointerY: number;
+  pointerCoordX: number;
+  pointerCoordY: number;
 
   constructor() {
     super({key: SceneKeys.GAME_SCENE});
@@ -32,7 +37,10 @@ export default class GameScene extends Phaser.Scene {
     this.setupCameraAndInput();
     this.observer.removeAllListeners();
     this.network = new Network(this);
+
     this.city = new City(this, Math.floor(WORLD_X / 2), Math.floor(WORLD_Y / 2));
+    this.network.placeStructure(this.city.coordX, this.city.coordY, this.city);
+    this.city.activate();
 
     const graphics = this.add.graphics();
     graphics.fillStyle(0xffffff, 1);
@@ -44,21 +52,44 @@ export default class GameScene extends Phaser.Scene {
     this.add.tileSprite(0, 0, GRID * WORLD_X,GRID * WORLD_Y, 'cell_white').setOrigin(0, 0);
 
     graphics.fillStyle(0xe2ffe9, 1);
-    graphics.lineStyle(1, 0x888888, 1);
+    graphics.lineStyle(1, 0xcccccc, 1);
     graphics.fillRect(0, 0, GRID, GRID);
     graphics.strokeRect(0, 0, GRID, GRID);
     graphics.generateTexture('cell_green', GRID, GRID);
     graphics.destroy();
 
-    // new Weapon(this, 18, 2);
-    // new Weapon(this, 19, 3);
-    // new Weapon(this, 20, 2);
-    // new Weapon(this, 21, 3);
-    // new Weapon(this, 22, 2);
+    const tickEvent = this.time.addEvent({
+      delay: 500,
+      timeScale: 1,
+      callback: () => {
+        for(const structure of BaseStructure.structuresInUpdatePriorityOrder) structure.update();
+      },
+      callbackScope: this,
+      loop: true
+    });
+
+    // console.log('tickevent', tickEvent);
+
   }
+
+  // tick() {
+  //   this.numTicks++;
+  //   const time = this.game.getTime();
+  //   const frame = this.game.getFrame();
+  //   // console.log('tick', time, frame);
+  //   for(const id of BaseStructure.activeStructureIds) {
+  //     const structure = BaseStructure.structuresById.get(id);
+  //     if (!structure) throw new Error('structure is null');
+  //     structure.tick(this.numTicks);
+  //   }
+
+  // }
 
   update(time: number, delta: number) {
     this.controls.update(delta);
+    // this.network.update();
+
+    // this.network.previewStructure(this.pointerX, this.pointerY, this.structureToBuild);
   }
 
   private setupCameraAndInput() {
@@ -125,8 +156,12 @@ export default class GameScene extends Phaser.Scene {
     keyONE.onDown = () => this.structureToBuild = Collector.name;
     keyTWO.onDown = () => this.structureToBuild = Weapon.name;
     keyTHREE.onDown = () => this.structureToBuild = Relay.name;
-    keyESC.onDown = () => this.structureToBuild = null;
-    keyX.onDown = () => this.structureToBuild = null;
+    keyESC.onDown = () => {
+      this.structureToBuild = null;
+      this.network.previewCancel();
+    };
+    // keyX.onDown = () => this.structureToBuild = null;
+    keyX.onDown = () => this.network.update();
 
     // MOUSE AND POINTER STUFF
     const input = this.input;
@@ -134,20 +169,28 @@ export default class GameScene extends Phaser.Scene {
     input.pointer1.motionFactor = 0.5;
 
     input.on('pointermove', (p: Phaser.Input.Pointer) => {
-      if (!p.isDown) return;
-      if (p.leftButtonDown()) return;
-      const { x, y } = p.velocity;
-      camera.scrollX -= x / camera.zoom;
-      camera.scrollY -= y / camera.zoom;
+      const { worldX, worldY } = p;
+      this.pointerX = worldX;
+      this.pointerY = worldY;
+      const pointerCoordX = Math.floor(worldX / GRID);
+      const pointerCoordY = Math.floor(worldY / GRID);
+      if (!p.isDown && this.structureToBuild && (this.pointerCoordX !== pointerCoordX || this.pointerCoordY !== pointerCoordY)) {
+        this.network.previewStructure(pointerCoordX, pointerCoordY, this.structureToBuild);
+        this.pointerCoordX = pointerCoordX;
+        this.pointerCoordY = pointerCoordY;
+      }
+    //   if (p.leftButtonDown() || ) return;
+    //   const { x, y } = p.velocity;
+    //   camera.scrollX -= x / camera.zoom;
+    //   camera.scrollY -= y / camera.zoom;
     });
 
-    input.on('pointerdown', (p: Phaser.Input.Pointer) => {
-      const { worldX, worldY } = p;
-      const coordX = Math.floor(worldX / GRID);
-      const coordY = Math.floor(worldY / GRID);
+    input.on('pointerdown', () => {
       if (!this.structureToBuild) return;
-      const structure = new STRUCTURE_BY_NAME[this.structureToBuild](this, coordX, coordY);
-      this.network.placeStructure(coordX, coordY, structure);
+      const {pointerCoordX, pointerCoordY} = this;
+      if (pointerCoordX < 0 || pointerCoordY < 0 || pointerCoordX >= WORLD_DATA[0].length || pointerCoordY >= WORLD_DATA.length) return; // skip out of bounds
+      const structure = new STRUCTURE_BY_NAME[this.structureToBuild](this, this.pointerCoordX, this.pointerCoordY);
+      this.network.placeStructure(this.pointerCoordX, this.pointerCoordY, structure);
       // else console.log('TODO implement select'); // TODO find structure under click and select it (show info about it in the UI)
     });
 

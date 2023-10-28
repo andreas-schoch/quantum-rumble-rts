@@ -1,4 +1,4 @@
-import { Cell, EnergyRequest } from '../City';
+import { Cell } from '../City';
 import GameScene from '../scenes/GameScene';
 import { GRID, WORLD_DATA } from '..';
 import { BaseStructure } from './BaseStructure';
@@ -7,12 +7,20 @@ export class Weapon extends BaseStructure {
   name = 'Weapon';
   relay = false;
   connectionRange = 5;
+  buildCost = 10;
+  healthMax = 100;
+  ammoMax = 10;
+  energyCollectionRange = 0;
+  energyCollectionRate = 0;
+  energyProduction = 0;
+  movable = true;
+  updatePriority = 1;
+
+  healthCurrent = 100;
+  buildCostPaid = 0;
+  ammoCurrent = 0;
 
   private graphics: Phaser.GameObjects.Graphics;
-  private health = 100;
-  private totalAmmo = 10;
-  private currentAmmo = 10;
-  private buildEnergyRequired = 100;
   private buildEnergyReceived = 0;
   private attackRange = 5;
   private lastAttackTime: number = -1;
@@ -23,16 +31,12 @@ export class Weapon extends BaseStructure {
     this.graphics = scene.add.graphics();
     this.draw();
 
-    this.scene.city.requestEnergy({
-      id: Math.random().toString(36).substring(2, 9),
-      type: 'energy',
-      amount: 100,
-      requester: this
-    });
-  }
-
-  receiveEnergy(amount: number, requestId: string): void {
-    console.log('received energy', amount, requestId);
+    // this.scene.city.requestEnergy({
+    //   id: Math.random().toString(36).substring(2, 9),
+    //   type: 'energy',
+    //   amount: 100,
+    //   requester: this
+    // });
   }
 
   draw() {
@@ -47,7 +51,7 @@ export class Weapon extends BaseStructure {
     this.graphics.fillCircle(0, 0, GRID * 0.4);
     // progressbar
     this.graphics.fillStyle(0xff0000, 1);
-    const degrees = 360 * (this.currentAmmo / this.totalAmmo);
+    const degrees = 360 * (this.ammoCurrent / this.ammoMax);
     this.graphics.slice(0, 0, GRID * 0.4, Phaser.Math.DegToRad(rotation), Phaser.Math.DegToRad(rotation + degrees));
     this.graphics.fillPath();
     this.graphics.strokeCircle(0, 0, GRID * 0.4);
@@ -59,11 +63,11 @@ export class Weapon extends BaseStructure {
   }
 
   attack() {
-    if (this.currentAmmo <= 0) return;
+    if (this.ammoCurrent <= 0) return;
     if (this.scene.game.getTime() - this.lastAttackTime > this.cooldown) return;
     const nearestTarget = this.getNearestTarget();
     if (!nearestTarget) return;
-    this.currentAmmo--;
+    this.ammoCurrent--;
     this.lastAttackTime = this.scene.game.getTime();
     this.draw();
   }
@@ -88,19 +92,15 @@ export class Weapon extends BaseStructure {
     return nearest;
   }
 
-  damage(amount: number) {
-    this.health -= amount;
-    if (this.health <= 0) this.scene.observer?.emit('weapon_destroyed', this);
+  onDamage(amount: number) {
+    this.healthMax -= amount;
+    if (this.healthMax <= 0) this.scene.observer?.emit('weapon_destroyed', this);
   }
 
   move(coordX: number, coordY: number) {
     this.coordX = coordX;
     this.coordY = coordY;
     this.draw();
-  }
-
-  requestEnergy(request: EnergyRequest) {
-    this.scene.observer?.emit('energy_request', request);
   }
 
   static generateTextures(): void {

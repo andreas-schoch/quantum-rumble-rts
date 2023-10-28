@@ -5,16 +5,23 @@ import { BaseStructure } from './BaseStructure';
 export class Relay extends BaseStructure {
   name = 'Relay';
   relay = true;
-  connectionRange = 10;
+  connectionRange = 13;
+  buildCost = 20;
+  healthMax = 1;
+  ammoMax = 0;
+  energyCollectionRange = 0;
+  energyCollectionRate = 0;
+  energyProduction = 0;
+  movable = false;
+  updatePriority = -1;
+
+  buildCostPaid = 0;
+  healthCurrent = 1;
+  ammoCurrent = 0;
 
   constructor(scene: GameScene, coordX: number, coordY: number) {
     super(scene, coordX, coordY);
-    this.relay = true;
-    this.scene.add.sprite(this.x, this.y, 'relay').setDepth(12);
-  }
-
-  receiveEnergy(amount: number, requestId: string): void {
-    console.log('received energy', amount, requestId);
+    this.sprite = this.scene.add.sprite(this.x, this.y, 'relay').setDepth(12);
   }
 
   destroy() {

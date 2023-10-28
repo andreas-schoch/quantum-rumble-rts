@@ -1,5 +1,3 @@
-import { Collector } from './structures/Collector';
-import { Weapon } from './structures/Weapon';
 import GameScene from './scenes/GameScene';
 import { GRID, HALF_GRID } from '.';
 import { BaseStructure } from './structures/BaseStructure';
@@ -17,7 +15,7 @@ export interface Cell {
 
 export interface EnergyRequest {
   id: string;
-  type: 'ammo' | 'energy';
+  type: 'ammo' | 'build' | 'health';
   amount: number;
   requester: BaseStructure
 }
@@ -26,11 +24,24 @@ export class City extends BaseStructure {
   name = 'City';
   relay = true;
   connectionRange = 10;
+  buildCost = 0;
+  healthMax = 500;
+  ammoMax = 0;
+  energyCollectionRange = 0;
+  energyCollectionRate = 0;
+  energyProduction = 5;
+  movable = true;
+  updatePriority = 10;
+
+  buildCostPaid = 0;
+  healthCurrent = 500;
+  ammoCurrent = 0;
+
   private readonly queue: EnergyRequest[] = [];
 
   constructor(scene: GameScene, coordX: number, coordY: number) {
     super(scene, coordX, coordY);
-    this.scene.add.sprite(this.x - (HALF_GRID * 3), this.y - (HALF_GRID * 3), 'city').setDepth(12).setOrigin(0, 0);
+    this.sprite = this.scene.add.sprite(this.x - (HALF_GRID * 3), this.y - (HALF_GRID * 3), 'city').setDepth(12).setOrigin(0, 0);
 
     // this.scene.time.addEvent({
     //   delay: 1000 / 2, // executes 20 times per second
@@ -40,9 +51,15 @@ export class City extends BaseStructure {
     // });
   }
 
-  requestEnergy(request: EnergyRequest) {
-    this.queue.push(request);
-  }
+  // update(time: number, delta: number) {
+  // // get energy collected from structures taking delta time into account (divide by number of cities if more than one connected to same network)
+
+  // // iterate through queue and send energy to any structure that needs it (debounce how much a single structure can get per second)
+  // }
+
+  // requestEnergy(request: EnergyRequest) {
+  //   this.queue.push(request);
+  // }
 
   // handleEnergy() {
   //   if (this.queue.length === 0) return;
