@@ -6,19 +6,22 @@ import { BaseStructure } from './BaseStructure';
 export class Weapon extends BaseStructure {
   name = 'Weapon';
   relay = false;
+  movable = true;
   connectionRange = 5;
-  buildCost = 10;
-  healthMax = 100;
-  ammoMax = 10;
   energyCollectionRange = 0;
   energyCollectionRate = 0;
   energyProduction = 0;
-  movable = true;
-  updatePriority = 1;
 
+  energyStorageCurrent = 0;
+  energyStorageMax = 0;
   healthCurrent = 100;
-  buildCostPaid = 0;
+  healthMax = 100;
   ammoCurrent = 0;
+  ammoMax = 10;
+  buildCost = 10;
+  buildCostPaid = 0;
+
+  updatePriority = 1;
 
   private graphics: Phaser.GameObjects.Graphics;
   private buildEnergyReceived = 0;
@@ -30,6 +33,11 @@ export class Weapon extends BaseStructure {
     super(scene, coordX, coordY);
     this.graphics = scene.add.graphics();
     this.draw();
+  }
+
+  update(): void {
+    super.update();
+    this.attack();
   }
 
   move(coordX: number, coordY: number) {
@@ -44,9 +52,11 @@ export class Weapon extends BaseStructure {
 
   protected attack() {
     if (this.ammoCurrent <= 0) return;
-    if (this.scene.game.getTime() - this.lastAttackTime > this.cooldown) return;
-    const nearestTarget = this.getNearestTarget();
-    if (!nearestTarget) return;
+
+    if (Math.random() > 0.25) return; // TODO remove this once there are enemies
+    // if (this.scene.game.getTime() - this.lastAttackTime > this.cooldown) return;
+    // const nearestTarget = this.getNearestTarget();
+    // if (!nearestTarget) return;
     this.ammoCurrent--;
     this.lastAttackTime = this.scene.game.getTime();
     this.draw();

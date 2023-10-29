@@ -23,23 +23,57 @@ export interface EnergyRequest {
 export class City extends BaseStructure {
   name = 'City';
   relay = true;
+  movable = true;
   connectionRange = 10;
-  buildCost = 0;
-  healthMax = 500;
-  ammoMax = 0;
-  energyCollectionRange = 0;
+  energyCollectionRange = 4;
   energyCollectionRate = 0;
   energyProduction = 5;
-  movable = true;
-  updatePriority = 10;
 
-  buildCostPaid = 0;
+  energyStorageCurrent = 0;
+  energyStorageMax = 20;
   healthCurrent = 500;
+  healthMax = 500;
   ammoCurrent = 0;
+  ammoMax = 0;
+  buildCost = 0;
+  buildCostPaid = 0;
+
+  updatePriority = 10;
+  private textEnergyStorage: Phaser.GameObjects.Text;
+  private textEnergyCollection: Phaser.GameObjects.Text;
 
   constructor(scene: GameScene, coordX: number, coordY: number) {
     super(scene, coordX, coordY);
-    this.sprite = this.scene.add.sprite(this.x - (HALF_GRID * 3), this.y - (HALF_GRID * 3), 'city').setDepth(12).setOrigin(0, 0);
+    this.sprite = this.scene.add.sprite(this.x - (HALF_GRID * 3), this.y - (HALF_GRID * 3), 'city').setDepth(1000).setOrigin(0, 0);
+    this.textEnergyStorage = this.scene.add.text(this.x, this.y - HALF_GRID, '0/20').setDepth(500000).setOrigin(0.5, 0.5).setColor('red').setResolution(2).setFontSize(20);
+    this.textEnergyCollection = this.scene.add.text(this.x, this.y + HALF_GRID, `+ ${this.scene.network.collectionSpriteSet.size * 0.01}`)
+      .setDepth(500000).setOrigin(0.5, 0.5).setColor('darkgreen').setResolution(2);
+  }
+
+  update(): void {
+    super.update();
+    const energyGenerated = this.scene.network.collectionSpriteSet.size * 0.01;
+    this.energyStorageCurrent = Math.min(this.energyStorageMax, this.energyStorageCurrent + energyGenerated);
+    while (this.energyStorageCurrent >= 1 && this.requestQueue.length) {
+      this.energyStorageCurrent--;
+      const request = this.requestQueue.shift()!;
+      const energyPath = request.requester.energyPath;
+      const points = energyPath.path.reduce<number[]>((acc, cur) => acc.concat(cur.x, cur.y), []);
+      const path = this.scene.add.path(points[0], points[1]);
+      for (let i = 2; i < points.length; i += 2) path.lineTo(points[i], points[i + 1]);
+      const texture = request.type === 'ammo' ? 'energy_red' : 'energy';
+      const duration = (energyPath.distance / this.scene.network.speed) * 1000;
+      const energyBall: Energy = {follower: this.scene.add.follower(path, points[0], points[1], texture), id: this.generateId()};
+      energyBall.follower.setScale(1).setDepth(100);
+      energyBall.follower.startFollow({duration, repeat: 0, onComplete: () => {
+        energyBall.follower.destroy();
+        request.requester.receiveEnergy(request);
+      }});
+    }
+    const deficit = this.requestQueue.reduce((acc, cur) => acc + cur.amount, 0);
+    this.textEnergyStorage.setText(`${this.energyStorageCurrent.toFixed(0)}/${this.energyStorageMax}`);
+    this.textEnergyStorage.setColor(deficit ? 'red' : 'darkgreen');
+    this.textEnergyCollection.setText(`+ ${energyGenerated.toFixed(1)}`);
   }
 
   static generateTextures(scene: Phaser.Scene): void {

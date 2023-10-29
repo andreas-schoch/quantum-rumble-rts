@@ -1,5 +1,5 @@
 import { GRID, HALF_GRID, WORLD_DATA } from '..';
-import { Cell, Energy, EnergyRequest } from '../City';
+import { Cell, EnergyRequest } from '../City';
 import { PathfinderResult } from '../Graph';
 import GameScene from '../scenes/GameScene';
 
@@ -48,8 +48,7 @@ export abstract class BaseStructure {
   abstract energyCollectionRange: number; // max energy collection manhattan distance
   abstract energyCollectionRate: number; // how much energy is collected per second per unclaimed cell in range
   abstract energyProduction: number; // different from collecting
-
-  pendingEnergyRequests: Record<EnergyRequest['type'], EnergyRequest[]> = {'ammo': [], 'build': [], 'health': []};
+  abstract energyStorageMax: number; // max energy storage
 
   destroyed = false;
   built = false;
@@ -58,7 +57,10 @@ export abstract class BaseStructure {
   abstract buildCostPaid: number;
   abstract healthCurrent: number;
   abstract ammoCurrent: number;
+  abstract energyStorageCurrent: number;
   preview = true;
+  pendingEnergyRequests: Record<EnergyRequest['type'], EnergyRequest[]> = {'ammo': [], 'build': [], 'health': []};
+  requestQueue: EnergyRequest[] = [];
 
   constructor(scene: GameScene, coordX: number, coordY: number) {
     this.scene = scene;
@@ -72,8 +74,13 @@ export abstract class BaseStructure {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   update() {
     if (this.destroyed) return;
+    // this.energyPath = this.scene.network.findPathToEnergySource(this);
     if (!this.energyPath.found && !this.energyProduction) this.energyPath = this.scene.network.findPathToEnergySource(this);
     if (!this.energyPath.found) return;
+
+    if (this.energyProduction) {
+      this.energyStorageCurrent = Math.min(this.scene.network.collectionSpriteSet.size, this.energyStorageMax);
+    }
 
     const energySource = this.energyPath.path[0].data;
     let request: EnergyRequest | null = null;
@@ -102,6 +109,7 @@ export abstract class BaseStructure {
     BaseStructure.structuresInUpdatePriorityOrder.push(this);
     BaseStructure.structuresInUpdatePriorityOrder.sort((a, b) => b.updatePriority - a.updatePriority);
     if (!this.energyProduction) this.energyPath = this.scene.network.findPathToEnergySource(this);
+    this.preview = false;
   }
 
   deactivate() {
@@ -135,26 +143,11 @@ export abstract class BaseStructure {
     }
   }
 
-  requestEnergy(request: EnergyRequest): string {
+  requestEnergy(request: EnergyRequest) {
     if (this.destroyed) throw new Error('This structure is already destroyed');
     if (!this.energyProduction) throw new Error('This structure does not produce energy');
     if (!request.requester.energyPath.found) throw new Error('This structure is not connected to an energy source');
-    const energyPath = request.requester.energyPath;
-
-    const points = energyPath.path.reduce<number[]>((acc, cur) => acc.concat(cur.x, cur.y), []);
-    const path = this.scene.add.path(points[0], points[1]);
-    for (let i = 2; i < points.length; i += 2) path.lineTo(points[i], points[i + 1]);
-
-    const texture = request.type === 'ammo' ? 'energy_red' : 'energy';
-    const duration = (energyPath.distance / this.scene.network.speed) * 1000;
-    const energyBall: Energy = {follower: this.scene.add.follower(path, points[0], points[1], texture), id: this.generateId()};
-    energyBall.follower.setScale(1).setDepth(100);
-    energyBall.follower.startFollow({duration, repeat: 0, onComplete: () => {
-      energyBall.follower.destroy();
-      request.requester.receiveEnergy(request);
-    }});
-
-    return energyBall.id;
+    if (this.energyStorageMax) this.requestQueue.push(request);
   }
 
   protected destroy() {

@@ -39,13 +39,15 @@ export default class GameScene extends Phaser.Scene {
 
     this.city = new City(this, Math.floor(WORLD_X / 2), Math.floor(WORLD_Y / 2));
     this.network.placeStructure(this.city.coordX, this.city.coordY, this.city);
-    this.city.activate();
+    this.network.startCollecting(this.city);
 
     this.time.addEvent({
       delay: 500,
       timeScale: 1,
       callback: () => {
+        // console.time('update');
         for(const structure of BaseStructure.structuresInUpdatePriorityOrder) structure.update();
+        // console.timeEnd('update');
       },
       callbackScope: this,
       loop: true

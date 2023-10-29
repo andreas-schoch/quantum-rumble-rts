@@ -5,19 +5,22 @@ import { BaseStructure } from './BaseStructure';
 export class Collector extends BaseStructure {
   name = 'Collector';
   relay = true;
+  movable = false;
   connectionRange = 5;
-  buildCost = 5;
-  healthMax = 1;
-  ammoMax = 0;
   energyCollectionRange = 4;
   energyCollectionRate = 0.05;
   energyProduction = 0;
-  movable = false;
-  updatePriority = -1;
 
-  buildCostPaid = 0;
+  energyStorageCurrent = 0;
+  energyStorageMax = 0;
   healthCurrent = 1;
+  healthMax = 1;
   ammoCurrent = 0;
+  ammoMax = 0;
+  buildCost = 5;
+  buildCostPaid = 0;
+
+  updatePriority = 1;
 
   sprite: Phaser.GameObjects.Sprite;
 

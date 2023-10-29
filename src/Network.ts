@@ -11,7 +11,7 @@ export class Network {
   textureKeysEdge: Set<string> = new Set();
   // in future iterations this will be a list of "energyStorage" structures
   root: City | null = null;
-  speed = 100; // how many pixels energy balls travel per second
+  speed = 300; // how many pixels energy balls travel per second
 
   // TODO this can be used to determine which structure collects the energy depending on their distance to the cell (equal if same distance)
   //  For enemies, it can be used to determine weather they can place a collector or not (if enemy structure in array, cannot place)

@@ -5,19 +5,22 @@ import { BaseStructure } from './BaseStructure';
 export class Relay extends BaseStructure {
   name = 'Relay';
   relay = true;
+  movable = false;
   connectionRange = 13;
-  buildCost = 20;
-  healthMax = 1;
-  ammoMax = 0;
   energyCollectionRange = 0;
   energyCollectionRate = 0;
   energyProduction = 0;
-  movable = false;
-  updatePriority = -1;
 
-  buildCostPaid = 0;
+  energyStorageCurrent = 0;
+  energyStorageMax = 0;
   healthCurrent = 1;
+  healthMax = 1;
   ammoCurrent = 0;
+  ammoMax = 0;
+  buildCost = 20;
+  buildCostPaid = 0;
+
+  updatePriority = 1;
 
   constructor(scene: GameScene, coordX: number, coordY: number) {
     super(scene, coordX, coordY);
