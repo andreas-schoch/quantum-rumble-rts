@@ -17,9 +17,12 @@ export const MIN_ZOOM: number = 1/3 * RESOLUTION_SCALE;
 
 export const GRID = 40;
 export const HALF_GRID = GRID / 2;
-export const WORLD_X = 65;
-export const WORLD_Y = 33;
+export const WORLD_X = 65 * 2;
+export const WORLD_Y = 65 * 2;
 export const WORLD_DATA: Cell[][] = []; // TODO maybe temporary until deciding weather to merge with graph (use vertices as cells)
+
+export const NETWORK_TICK_INTERVAL = 1000; // ms
+export const NETWORK_TRAVEL_SPEED = 200; // pixels per second
 
 export const STRUCTURE_BY_NAME = {
   [Weapon.name]: Weapon,

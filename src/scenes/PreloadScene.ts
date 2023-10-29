@@ -2,7 +2,6 @@ import {GRID, SceneKeys} from '..';
 import { City } from '../City';
 import { Collector } from '../structures/Collector';
 import { Relay } from '../structures/Relay';
-import { Weapon } from '../structures/Weapon';
 
 export default class PreloadScene extends Phaser.Scene {
   constructor() {
@@ -10,6 +9,9 @@ export default class PreloadScene extends Phaser.Scene {
   }
 
   preload() {
+    this.load.audio('place_structure', ['assets/audio/sfx/place_structure/boink.ogg', 'assets/audio/sfx/place_structure/boink.mp3']);
+    this.load.audio('start_collect', ['assets/audio/sfx/start_collect/sharp_echo.wav',]);
+    this.load.audio('attack_turret', ['assets/audio/sfx/attack_turret/footstep_concrete_001.ogg',]);
   }
 
   create() {
@@ -21,7 +23,6 @@ export default class PreloadScene extends Phaser.Scene {
     City.generateTextures(this);
     Collector.generateTextures(this);
     Relay.generateTextures(this);
-    Weapon.generateTextures();
 
     // background cell white
     const graphics = this.add.graphics();

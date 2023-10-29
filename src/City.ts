@@ -1,5 +1,5 @@
 import GameScene from './scenes/GameScene';
-import { GRID, HALF_GRID } from '.';
+import { GRID, HALF_GRID, NETWORK_TRAVEL_SPEED } from '.';
 import { BaseStructure } from './structures/BaseStructure';
 
 export interface Energy {
@@ -25,7 +25,7 @@ export class City extends BaseStructure {
   relay = true;
   movable = true;
   connectionRange = 10;
-  energyCollectionRange = 4;
+  energyCollectionRange = 5;
   energyCollectionRate = 0;
   energyProduction = 5;
 
@@ -62,7 +62,7 @@ export class City extends BaseStructure {
       const path = this.scene.add.path(points[0], points[1]);
       for (let i = 2; i < points.length; i += 2) path.lineTo(points[i], points[i + 1]);
       const texture = request.type === 'ammo' ? 'energy_red' : 'energy';
-      const duration = (energyPath.distance / this.scene.network.speed) * 1000;
+      const duration = (energyPath.distance / NETWORK_TRAVEL_SPEED) * 1000;
       const energyBall: Energy = {follower: this.scene.add.follower(path, points[0], points[1], texture), id: this.generateId()};
       energyBall.follower.setScale(1).setDepth(100);
       energyBall.follower.startFollow({duration, repeat: 0, onComplete: () => {

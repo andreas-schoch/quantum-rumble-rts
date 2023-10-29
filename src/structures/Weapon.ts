@@ -29,8 +29,11 @@ export class Weapon extends BaseStructure {
   private lastAttackTime: number = -1;
   private cooldown = 1000;
 
+  static attackSFX: Phaser.Sound.BaseSound;
+
   constructor(scene: GameScene, coordX: number, coordY: number) {
     super(scene, coordX, coordY);
+    if (!Weapon.attackSFX) Weapon.attackSFX = scene.sound.add('attack_turret', {detune: -200, rate: 1.25, volume: 0.5 , loop: false});
     this.graphics = scene.add.graphics();
     this.draw();
   }
@@ -60,6 +63,7 @@ export class Weapon extends BaseStructure {
     this.ammoCurrent--;
     this.lastAttackTime = this.scene.game.getTime();
     this.draw();
+    Weapon.attackSFX.play();
   }
 
   protected getNearestTarget(): Cell | null {
@@ -103,10 +107,5 @@ export class Weapon extends BaseStructure {
     this.graphics.fillCircle(0, 0, GRID * 0.2);
     this.graphics.strokeCircle(0, 0, GRID * 0.2);
     this.graphics.setDepth(12);
-  }
-
-  static generateTextures(): void {
-    // TODO generate the dynamic red ammo texture as a spritesheet animation
-
   }
 }

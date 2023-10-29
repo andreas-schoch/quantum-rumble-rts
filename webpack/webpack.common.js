@@ -18,6 +18,7 @@ module.exports = {
     rules: [
       {
         test: /\.tsx?$|\.jsx?$/,
+        exclude: /\.worker\.ts$/,  // <-- Add this line
         include: path.join(__dirname, '../src'),
         loader: 'ts-loader',
       },
@@ -37,6 +38,11 @@ module.exports = {
   },
   plugins: [
     new webpack.ProgressPlugin(),
-    new HtmlWebpackPlugin({gameName: 'Quantum Rumble', template: 'index.html'})
+    new HtmlWebpackPlugin({gameName: 'Quantum Rumble', template: 'index.html'}),
+    new CopyWebpackPlugin({
+      patterns: [
+        {from: 'public/audio', to: 'assets/audio'},
+      ],
+    }),
   ],
 };

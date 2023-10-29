@@ -1,4 +1,4 @@
-import {DEFAULT_WIDTH, DEFAULT_ZOOM, GRID, MAX_ZOOM, MIN_ZOOM, STRUCTURE_BY_NAME, SceneKeys, WORLD_DATA, WORLD_X, WORLD_Y} from '..';
+import {DEFAULT_WIDTH, DEFAULT_ZOOM, GRID, MAX_ZOOM, MIN_ZOOM, NETWORK_TICK_INTERVAL, STRUCTURE_BY_NAME, SceneKeys, WORLD_DATA, WORLD_X, WORLD_Y} from '..';
 import { Cell, City } from '../City';
 import { Network } from '../Network';
 import { BaseStructure } from '../structures/BaseStructure';
@@ -19,6 +19,8 @@ export default class GameScene extends Phaser.Scene {
   pointerY: number | null = null;
   pointerCoordX: number | null = null;
   pointerCoordY: number;
+  sfx_start_collect: Phaser.Sound.BaseSound;
+  sfx_place_structure: Phaser.Sound.BaseSound;
 
   constructor() {
     super({key: SceneKeys.GAME_SCENE});
@@ -32,6 +34,25 @@ export default class GameScene extends Phaser.Scene {
   }
 
   private create() {
+
+    this.sfx_start_collect = this.sound.add('start_collect', {detune: 600, rate: 1.25, volume: 0.5 , loop: false});
+    this.sfx_place_structure = this.sound.add('place_structure', {detune: 200, rate: 1.25, volume: 1 , loop: false});
+
+    async function init() {
+      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+      // @ts-ignore
+      const workerInstance = new WebpackWorker();
+      const obj = wrap<{inc: () => void, counter: number}>(workerInstance);
+      // WebWorkers use `postMessage` and therefore work with Comlink.
+
+      // alert(`Counter: ${await obj.counter}`);
+      await obj.inc();
+      return await obj.counter;
+      // alert(`Counter: ${await obj.counter}`);
+    }
+
+    init().then(() => console.log('counter incremented'));
+
     this.add.tileSprite(0, 0, GRID * WORLD_X,GRID * WORLD_Y, 'cell_white').setOrigin(0, 0);
     this.setupCameraAndInput();
     this.observer.removeAllListeners();
@@ -42,12 +63,10 @@ export default class GameScene extends Phaser.Scene {
     this.network.startCollecting(this.city);
 
     this.time.addEvent({
-      delay: 500,
+      delay: NETWORK_TICK_INTERVAL,
       timeScale: 1,
       callback: () => {
-        // console.time('update');
         for(const structure of BaseStructure.structuresInUpdatePriorityOrder) structure.update();
-        // console.timeEnd('update');
       },
       callbackScope: this,
       loop: true

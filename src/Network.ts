@@ -34,6 +34,8 @@ export class Network {
 
     if (structure.energyCollectionRange === 0) return;
 
+    this.scene.sfx_start_collect.play();
+
     for (let y = coordY - energyCollectionRange; y <= coordY + energyCollectionRange; y++) {
       for (let x = coordX - energyCollectionRange; x <= coordX + energyCollectionRange; x++) {
         if (x < 0 || y < 0 || x >= WORLD_DATA[0].length || y >= WORLD_DATA.length) continue; // skip out of bounds
@@ -103,6 +105,7 @@ export class Network {
     this.connect(coordX, coordY, ref);
     ref.activate();
     this.previewStructureObject = null;
+    this.scene.sfx_place_structure.play();
   }
 
   private previewEdge(coordX: number, coordY: number, ref: BaseStructure) {
