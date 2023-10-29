@@ -1,12 +1,15 @@
+import WebpackWorker from 'worker-loader!./workers/pathFinder.worker.ts';
 import GameScene from './scenes/GameScene';
 import { Graph, PathfinderResult } from './Graph';
 import { BaseStructure, getCellsInRange } from './structures/BaseStructure';
 import { City } from './City';
 import { GRID, STRUCTURE_BY_NAME, WORLD_DATA, WORLD_X, WORLD_Y } from '.';
+import { Remote, wrap } from 'comlink';
 
 export class Network {
   scene: GameScene;
   graph: Graph<BaseStructure, Phaser.GameObjects.Sprite> = new Graph();
+  remoteGraph: Remote<Graph>;
   renderTexture: Phaser.GameObjects.RenderTexture;
   textureKeysEdge: Set<string> = new Set();
   // in future iterations this will be a list of "energyStorage" structures
@@ -22,6 +25,9 @@ export class Network {
   previewStructureObject: BaseStructure | null = null;
 
   constructor(scene: GameScene) {
+    const workerInstance = new WebpackWorker();
+    // workerInstance.
+    this.remoteGraph = wrap(workerInstance);
     this.scene = scene;
     this.previewEdgeSprite = this.scene.add.sprite(0, 0, 'cell_green').setDepth(10).setOrigin(0, 0.5);
     this.previewEdgeRenderTexture = this.scene.add.renderTexture(0, 0, WORLD_X * GRID, WORLD_Y * GRID).setDepth(10).setOrigin(0, 0);
@@ -101,6 +107,7 @@ export class Network {
   placeStructure(coordX: number, coordY: number, ref: BaseStructure) {
     if (WORLD_DATA[coordY][coordX].ref) return;
     this.graph.createVertex(ref.id, ref.x, ref.y, ref);
+    this.remoteGraph.createVertex(ref.id, ref.x, ref.y, {x: ref.x, y: ref.y});
     if (ref instanceof City) this.root = ref;
     this.connect(coordX, coordY, ref);
     ref.activate();
@@ -135,6 +142,7 @@ export class Network {
       const angle = Math.atan2(cell.ref.y - ref.y, cell.ref.x - ref.x);
       const sprite = this.scene.add.sprite(ref.x, ref.y, this.getEdgeSpriteTexture(euclideanDistance)).setDepth(10).setOrigin(0, 0.5).setRotation(angle);
       this.graph.createEdge(ref.id, cell.ref.id, euclideanDistance, sprite);
+      this.remoteGraph.createEdge(ref.id, cell.ref.id, euclideanDistance, 'sprite placeholder');
     }
   }
 
@@ -162,6 +170,7 @@ export class Network {
       this.graph.edgesByVertex.get(otherVertId)?.filter(e => e.id !== edge.id);
       edge.data.destroy();
       this.graph.edges.delete(edge.id);
+      this.remoteGraph.edges.then(e => e.delete(edge.id));
     });
 
     const ref = WORLD_DATA[vert.data.coordY][vert.data.coordX].ref;
@@ -170,6 +179,7 @@ export class Network {
       WORLD_DATA[vert.data.coordY][vert.data.coordX].ref = null;
     }
     this.graph.removeVertex(id);
+    this.remoteGraph.removeVertex(id);
   }
 
   findPathToEnergySource(structure: BaseStructure): PathfinderResult<BaseStructure> {
@@ -181,6 +191,23 @@ export class Network {
     for (const vert of res.path) {
       if (vert.data.id === structure.id) continue;
       if (vert.data.buildCostPaid < vert.data.buildCost) {
+        invalid = true;
+        break;
+      }
+    }
+    return invalid ? { path: [], distance: Infinity, found: false } : res;
+  }
+
+  async findPathToEnergySourceAsync(structure: BaseStructure): Promise<PathfinderResult<{x: number, y: number}>> {
+    if (!this.root) throw new Error('root is null');
+    const start = this.root.id;
+    const end = structure.id;
+    const res = await this.remoteGraph.findPath(start, end, 'euclidian');
+    let invalid = false;
+    for (const vert of res.path) {
+      if (vert.id === structure.id) continue;
+      const adj = BaseStructure.structuresById.get(vert.id);
+      if (!adj || adj.buildCostPaid < adj.buildCost) {
         invalid = true;
         break;
       }

@@ -38,21 +38,6 @@ export default class GameScene extends Phaser.Scene {
     this.sfx_start_collect = this.sound.add('start_collect', {detune: 600, rate: 1.25, volume: 0.5 , loop: false});
     this.sfx_place_structure = this.sound.add('place_structure', {detune: 200, rate: 1.25, volume: 1 , loop: false});
 
-    async function init() {
-      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-      // @ts-ignore
-      const workerInstance = new WebpackWorker();
-      const obj = wrap<{inc: () => void, counter: number}>(workerInstance);
-      // WebWorkers use `postMessage` and therefore work with Comlink.
-
-      // alert(`Counter: ${await obj.counter}`);
-      await obj.inc();
-      return await obj.counter;
-      // alert(`Counter: ${await obj.counter}`);
-    }
-
-    init().then(() => console.log('counter incremented'));
-
     this.add.tileSprite(0, 0, GRID * WORLD_X,GRID * WORLD_Y, 'cell_white').setOrigin(0, 0);
     this.setupCameraAndInput();
     this.observer.removeAllListeners();
@@ -66,7 +51,9 @@ export default class GameScene extends Phaser.Scene {
       delay: NETWORK_TICK_INTERVAL,
       timeScale: 1,
       callback: () => {
+        console.time('tick');
         for(const structure of BaseStructure.structuresInUpdatePriorityOrder) structure.update();
+        console.timeEnd('tick');
       },
       callbackScope: this,
       loop: true

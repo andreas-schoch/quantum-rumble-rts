@@ -27,7 +27,7 @@ export abstract class BaseStructure {
   y: number;
   coordX: number;
   coordY: number;
-  energyPath: PathfinderResult<BaseStructure> = {found: false, distance: Infinity, path: []};
+  energyPath: PathfinderResult<{x: number, y: number}> = {found: false, distance: Infinity, path: []};
   static structuresInUpdatePriorityOrder: BaseStructure[] = [];
   static structuresById: Map<string, BaseStructure> = new Map();
   static builtStructureIds: Set<string> = new Set();
@@ -61,6 +61,7 @@ export abstract class BaseStructure {
   preview = true;
   pendingEnergyRequests: Record<EnergyRequest['type'], EnergyRequest[]> = {'ammo': [], 'build': [], 'health': []};
   requestQueue: EnergyRequest[] = [];
+  asyncPathfindingInProgress: boolean;
 
   constructor(scene: GameScene, coordX: number, coordY: number) {
     this.scene = scene;
@@ -69,20 +70,25 @@ export abstract class BaseStructure {
     this.y = coordY * GRID + HALF_GRID;
     this.coordX = coordX;
     this.coordY = coordY;
+    BaseStructure.structuresById.set(this.id, this);
   }
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   update() {
     if (this.destroyed) return;
-    // this.energyPath = this.scene.network.findPathToEnergySource(this);
-    if (!this.energyPath.found && !this.energyProduction) this.energyPath = this.scene.network.findPathToEnergySource(this);
+    if (!this.energyPath.found && !this.asyncPathfindingInProgress && !this.energyProduction) {
+      this.asyncPathfindingInProgress = true;
+      this.scene.network.findPathToEnergySourceAsync(this).then(path => this.energyPath = path);
+    }
+
     if (!this.energyPath.found) return;
 
     if (this.energyProduction) {
       this.energyStorageCurrent = Math.min(this.scene.network.collectionSpriteSet.size, this.energyStorageMax);
     }
 
-    const energySource = this.energyPath.path[0].data;
+    const energySource = BaseStructure.structuresById.get(this.energyPath.path[0].id);
+    if (!energySource) return;
     let request: EnergyRequest | null = null;
 
     if (!this.built && this.pendingEnergyRequests['build'].length < this.buildCost - this.buildCostPaid) {

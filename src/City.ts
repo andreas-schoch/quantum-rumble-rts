@@ -25,7 +25,7 @@ export class City extends BaseStructure {
   relay = true;
   movable = true;
   connectionRange = 10;
-  energyCollectionRange = 5;
+  energyCollectionRange = 4;
   energyCollectionRate = 0;
   energyProduction = 5;
 
@@ -46,13 +46,13 @@ export class City extends BaseStructure {
     super(scene, coordX, coordY);
     this.sprite = this.scene.add.sprite(this.x - (HALF_GRID * 3), this.y - (HALF_GRID * 3), 'city').setDepth(1000).setOrigin(0, 0);
     this.textEnergyStorage = this.scene.add.text(this.x, this.y - HALF_GRID, '0/20').setDepth(500000).setOrigin(0.5, 0.5).setColor('red').setResolution(2).setFontSize(20);
-    this.textEnergyCollection = this.scene.add.text(this.x, this.y + HALF_GRID, `+ ${this.scene.network.collectionSpriteSet.size * 0.01}`)
+    this.textEnergyCollection = this.scene.add.text(this.x, this.y + HALF_GRID, `+ ${this.scene.network.collectionSpriteSet.size * 0.03}`)
       .setDepth(500000).setOrigin(0.5, 0.5).setColor('darkgreen').setResolution(2);
   }
 
   update(): void {
     super.update();
-    const energyGenerated = this.scene.network.collectionSpriteSet.size * 0.01;
+    const energyGenerated = this.scene.network.collectionSpriteSet.size * 0.03;
     this.energyStorageCurrent = Math.min(this.energyStorageMax, this.energyStorageCurrent + energyGenerated);
     while (this.energyStorageCurrent >= 1 && this.requestQueue.length) {
       this.energyStorageCurrent--;
