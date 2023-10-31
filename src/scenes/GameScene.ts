@@ -1,10 +1,11 @@
-import {DEFAULT_WIDTH, DEFAULT_ZOOM, GRID, MAX_ZOOM, MIN_ZOOM, NETWORK_TICK_INTERVAL, STRUCTURE_BY_NAME, SceneKeys, WORLD_DATA, WORLD_X, WORLD_Y} from '..';
-import { Cell, City } from '../City';
+import {DEFAULT_WIDTH, DEFAULT_ZOOM, GRID, MAX_ZOOM, MIN_ZOOM, TICK_RATE, STRUCTURE_BY_NAME, SceneKeys, WORLD_DATA, WORLD_X, WORLD_Y} from '..';
+import { Cell, City } from '../structures/City';
 import { Network } from '../Network';
 import { BaseStructure } from '../structures/BaseStructure';
 import { Collector } from '../structures/Collector';
 import { Relay } from '../structures/Relay';
 import { Weapon } from '../structures/Weapon';
+import { Battery } from '../structures/Battery';
 
 type CameraRotations = '0' | '90' | '180' | '270';
 export default class GameScene extends Phaser.Scene {
@@ -12,7 +13,6 @@ export default class GameScene extends Phaser.Scene {
   controls!: Phaser.Cameras.Controls.SmoothedKeyControl;
   city!: City;
   network!: Network;
-  private numTicks = 0;
 
   private structureToBuild: string | null = null; // TODO fix this
   pointerX: number | null = null;
@@ -21,6 +21,7 @@ export default class GameScene extends Phaser.Scene {
   pointerCoordY: number;
   sfx_start_collect: Phaser.Sound.BaseSound;
   sfx_place_structure: Phaser.Sound.BaseSound;
+  tickCounter: number;
 
   constructor() {
     super({key: SceneKeys.GAME_SCENE});
@@ -34,7 +35,6 @@ export default class GameScene extends Phaser.Scene {
   }
 
   private create() {
-
     this.sfx_start_collect = this.sound.add('start_collect', {detune: 600, rate: 1.25, volume: 0.5 , loop: false});
     this.sfx_place_structure = this.sound.add('place_structure', {detune: 200, rate: 1.25, volume: 1 , loop: false});
 
@@ -47,13 +47,18 @@ export default class GameScene extends Phaser.Scene {
     this.network.placeStructure(this.city.coordX, this.city.coordY, this.city);
     this.network.startCollecting(this.city);
 
+    this.tickCounter = 0;
+    // Only rendering related things should happen every frame. I potentially want to be able to simulate this game on a server, so it needs to be somewhat deterministic
     this.time.addEvent({
-      delay: NETWORK_TICK_INTERVAL,
+      delay: TICK_RATE,
       timeScale: 1,
       callback: () => {
-        console.time('tick');
-        for(const structure of BaseStructure.structuresInUpdatePriorityOrder) structure.update();
-        console.timeEnd('tick');
+        // console.time('tick');
+        this.tickCounter++;
+        this.network.tick(this.tickCounter);
+        // this.city.tick(this.tickCounter);
+        for(const structure of BaseStructure.structuresInUpdatePriorityOrder) structure.tick(this.tickCounter);
+        // console.timeEnd('tick');
       },
       callbackScope: this,
       loop: true
@@ -85,6 +90,8 @@ export default class GameScene extends Phaser.Scene {
     const keyONE = keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.ONE);
     const keyTWO = keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.TWO);
     const keyTHREE = keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.THREE);
+    const keyFOUR = keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.FOUR);
+    // const keyFIVE = keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.FIVE);
     const keyESC = keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.ESC);
     const keyX = keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.X);
 
@@ -141,6 +148,16 @@ export default class GameScene extends Phaser.Scene {
       this.network.previewCancel();
       this.network.previewStructure(this.pointerCoordX, this.pointerCoordY, this.structureToBuild);
     };
+    keyFOUR.onDown = () => {
+      this.structureToBuild = Battery.name;
+      this.network.previewCancel();
+      this.network.previewStructure(this.pointerCoordX, this.pointerCoordY, this.structureToBuild);
+    };
+    // keyFIVE.onDown = () => {
+    //   this.structureToBuild = Relay.name;
+    //   this.network.previewCancel();
+    //   this.network.previewStructure(this.pointerCoordX, this.pointerCoordY, this.structureToBuild);
+    // };
     keyESC.onDown = () => {
       this.structureToBuild = null;
       this.network.previewCancel();

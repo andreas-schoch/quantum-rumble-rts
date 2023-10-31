@@ -4,21 +4,17 @@ import { BaseStructure } from './BaseStructure';
 
 export class Relay extends BaseStructure {
   name = 'Relay';
-  relay = true;
+  isRelay = true;
   movable = false;
   connectionRange = 13;
   energyCollectionRange = 0;
   energyCollectionRate = 0;
   energyProduction = 0;
 
-  energyStorageCurrent = 0;
-  energyStorageMax = 0;
-  healthCurrent = 1;
+  energyStorageCapacity = 0;
   healthMax = 1;
-  ammoCurrent = 0;
   ammoMax = 0;
   buildCost = 20;
-  buildCostPaid = 0;
 
   updatePriority = 1;
 

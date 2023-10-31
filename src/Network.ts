@@ -1,9 +1,9 @@
 import WebpackWorker from 'worker-loader!./workers/pathFinder.worker.ts';
 import GameScene from './scenes/GameScene';
 import { Graph, PathfinderResult } from './Graph';
-import { BaseStructure, getCellsInRange } from './structures/BaseStructure';
-import { City } from './City';
-import { GRID, STRUCTURE_BY_NAME, WORLD_DATA, WORLD_X, WORLD_Y } from '.';
+import { BaseStructure } from './structures/BaseStructure';
+import { Cell, City, Energy, EnergyRequest } from './structures/City';
+import { GRID, NETWORK_TRAVEL_SPEED, STRUCTURE_BY_NAME, TICK_DELTA, WORLD_DATA, WORLD_X, WORLD_Y } from '.';
 import { Remote, wrap } from 'comlink';
 
 export class Network {
@@ -14,15 +14,25 @@ export class Network {
   textureKeysEdge: Set<string> = new Set();
   // in future iterations this will be a list of "energyStorage" structures
   root: City | null = null;
-  speed = 300; // how many pixels energy balls travel per second
 
   // TODO this can be used to determine which structure collects the energy depending on their distance to the cell (equal if same distance)
   //  For enemies, it can be used to determine weather they can place a collector or not (if enemy structure in array, cannot place)
   collectionMap: Map<string, [BaseStructure[], Phaser.GameObjects.Sprite | undefined]> = new Map();
   collectionSpriteSet: Set<Phaser.GameObjects.Sprite> = new Set();
+
+  // State
+  speed = 300; // how many pixels energy balls travel per second
+  energyProducing = 0;
+  energyCollecting = 0;
+  energyStorageMax = 0;
+  energyStorageCurrent = 0;
+
   previewEdgeSprite: Phaser.GameObjects.Sprite;
   previewEdgeRenderTexture: Phaser.GameObjects.RenderTexture;
   previewStructureObject: BaseStructure | null = null;
+
+  requestQueue: EnergyRequest[] = [];
+  energyDeficit: number;
 
   constructor(scene: GameScene) {
     const workerInstance = new WebpackWorker();
@@ -30,9 +40,71 @@ export class Network {
     this.remoteGraph = wrap(workerInstance);
     this.scene = scene;
     this.previewEdgeSprite = this.scene.add.sprite(0, 0, 'cell_green').setDepth(10).setOrigin(0, 0.5);
-    this.previewEdgeRenderTexture = this.scene.add.renderTexture(0, 0, WORLD_X * GRID, WORLD_Y * GRID).setDepth(10).setOrigin(0, 0);
+    this.previewEdgeRenderTexture = this.scene.add.renderTexture(0, 0, WORLD_X * GRID, WORLD_Y * GRID).setDepth(10).setOrigin(0, 0).setAlpha(0.5);
     this.previewEdgeSprite.setVisible(false);
     this.previewEdgeRenderTexture.draw(this.previewEdgeSprite);
+  }
+
+  get energyPerSecond() {
+    return this.energyProducing + this.energyCollecting;
+  }
+
+  tick(tickCounter: number) {
+    const energyPerTick = this.energyPerSecond * TICK_DELTA;
+    this.energyStorageCurrent = Math.min(this.energyStorageCurrent + energyPerTick, this.scene.network.energyStorageMax);
+    this.energyDeficit = this.scene.network.requestQueue.reduce((acc, cur) => acc + cur.amount, 0);
+
+    while (this.energyStorageCurrent >= 1 && this.requestQueue.length) {
+      const request = this.requestQueue.shift()!;
+      console.log('request', request.id, request.type);
+      this.energyStorageCurrent -= request.amount;
+      this.sendEnergyBall(request);
+    }
+  }
+
+  requestEnergy(type: EnergyRequest['type'], amount: number, requester: BaseStructure) {
+    // if (this.destroyed) throw new Error('This structure is already destroyed');
+    // if (!this.isEnergyRoot) throw new Error('This structure does not produce energy');
+    if (!requester.energyPath.found) throw new Error('This structure is not connected to an energy source');
+    const request: EnergyRequest = {id: this.scene.network.generateId(), type, amount, requester};
+    this.requestQueue.push(request);
+    return request;
+  }
+
+  generateId() {
+    return Math.random().toString(36).substring(2, 10);
+  }
+
+  getCellsInRange(coordX: number, coordY: number, range: number, occupiedOnly = true) {
+    const cells: [Cell, number][] = [];
+    for (let y = coordY - range; y <= coordY + range; y++) {
+      for (let x = coordX - range; x <= coordX + range; x++) {
+        if (x < 0 || y < 0 || x >= WORLD_DATA[0].length || y >= WORLD_DATA.length) continue; // skip out of bounds
+        const cell = WORLD_DATA[y][x];
+        if (occupiedOnly && !cell.ref) continue; // skip unoccupied cells only when desired
+        const distance = Math.abs(x - coordX) + Math.abs(y - coordY); // manhattan distance, not euclidean
+        if (distance > range) continue; // skip cells that are out of range
+        cells.push([cell, distance]);
+      }
+    }
+
+    return cells;
+  }
+
+  protected sendEnergyBall(request: EnergyRequest) {
+    // console.log('--------send energy ball', this.requestQueue.length);
+    const energyPath = request.requester.energyPath;
+    const points = energyPath.path.reduce<number[]>((acc, cur) => acc.concat(cur.x, cur.y), []);
+    const path = this.scene.add.path(points[0], points[1]);
+    for (let i = 2; i < points.length; i += 2) path.lineTo(points[i], points[i + 1]);
+    const texture = request.type === 'ammo' ? 'energy_red' : 'energy';
+    const duration = (energyPath.distance / NETWORK_TRAVEL_SPEED) * 1000;
+    const energyBall: Energy = {follower: this.scene.add.follower(path, points[0], points[1], texture), id: this.generateId()};
+    energyBall.follower.setScale(1).setDepth(100);
+    energyBall.follower.startFollow({duration, repeat: 0, onComplete: () => {
+      energyBall.follower.destroy();
+      request.requester.receiveEnergy(request);
+    }});
   }
 
   startCollecting(structure: BaseStructure) {
@@ -55,6 +127,7 @@ export class Network {
           this.collectionSpriteSet.add(arr[1]);
         }
         this.collectionMap.set(key, arr);
+        this.energyCollecting = this.collectionMap.size * 0.005;
       }
     }
   }
@@ -117,9 +190,9 @@ export class Network {
 
   private previewEdge(coordX: number, coordY: number, ref: BaseStructure) {
     this.previewEdgeRenderTexture.clear();
-    for (const [cell, manhattanDistance] of getCellsInRange(coordX, coordY, ref.connectionRange)) {
+    for (const [cell, manhattanDistance] of this.getCellsInRange(coordX, coordY, ref.connectionRange)) {
       if (!cell.ref) continue;
-      if (!cell.ref.relay && !ref.relay) continue; // non-relay structures cannot connect to each other
+      if (!cell.ref.isRelay && !ref.isRelay) continue; // non-relay structures cannot connect to each other
       if (cell.ref.id === ref.id) continue;
       if (manhattanDistance > cell.ref.connectionRange) continue; // won't connect if neighbour has a smaller connection range
       const euclideanDistance = Math.sqrt(Math.pow(ref.x - cell.ref.x, 2) + Math.pow(ref.y - cell.ref.y, 2));
@@ -127,15 +200,15 @@ export class Network {
       this.previewEdgeSprite.setTexture(this.getEdgeSpriteTexture(euclideanDistance));
       this.previewEdgeSprite.setPosition(ref.x, ref.y);
       this.previewEdgeSprite.setRotation(Math.atan2(cell.ref.y - ref.y, cell.ref.x - ref.x));
-      this.previewEdgeSprite.setVisible(true);
+      // this.previewEdgeSprite.setVisible(true);
       this.previewEdgeRenderTexture.draw(this.previewEdgeSprite);
     }
   }
 
   private connect(coordX: number, coordY: number, ref: BaseStructure) {
-    for (const [cell, manhattanDistance] of getCellsInRange(coordX, coordY, ref.connectionRange)) {
+    for (const [cell, manhattanDistance] of this.getCellsInRange(coordX, coordY, ref.connectionRange)) {
       if (!cell.ref) continue;
-      if (!cell.ref.relay && !ref.relay) continue; // non-relay structures cannot connect to each other
+      if (!cell.ref.isRelay && !ref.isRelay) continue; // non-relay structures cannot connect to each other
       if (cell.ref.id === ref.id) continue;
       const euclideanDistance = Math.sqrt(Math.pow(ref.x - cell.ref.x, 2) + Math.pow(ref.y - cell.ref.y, 2));
       if (manhattanDistance > cell.ref.connectionRange || Math.round(euclideanDistance) === 0) continue; // won't connect if neighbour has a smaller connection range
@@ -190,7 +263,7 @@ export class Network {
     let invalid = false;
     for (const vert of res.path) {
       if (vert.data.id === structure.id) continue;
-      if (vert.data.buildCostPaid < vert.data.buildCost) {
+      if (vert.data.buildCost) {
         invalid = true;
         break;
       }
@@ -207,7 +280,7 @@ export class Network {
     for (const vert of res.path) {
       if (vert.id === structure.id) continue;
       const adj = BaseStructure.structuresById.get(vert.id);
-      if (!adj || adj.buildCostPaid < adj.buildCost) {
+      if (!adj || adj.buildCost) {
         invalid = true;
         break;
       }

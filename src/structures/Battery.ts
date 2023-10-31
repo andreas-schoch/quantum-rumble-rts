@@ -2,41 +2,41 @@ import { GRID, HALF_GRID } from '..';
 import GameScene from '../scenes/GameScene';
 import { BaseStructure } from './BaseStructure';
 
-export class Collector extends BaseStructure {
-  name = 'Collector';
-  isRelay = true;
+export class Battery extends BaseStructure {
+  name = 'Battery';
+  isRelay = false;
   movable = false;
   connectionRange = 5;
-  energyCollectionRange = 4;
-  energyCollectionRate = 0.05;
+  energyCollectionRange = 0;
+  energyCollectionRate = 0;
   energyProduction = 0;
 
-  energyStorageCapacity = 0;
-  healthMax = 1;
+  energyStorageCapacity = 10;
+  healthMax = 5;
   ammoMax = 0;
-  buildCost = 5;
+  buildCost = 10;
 
-  updatePriority = 2;
+  updatePriority = 10;
 
   sprite: Phaser.GameObjects.Sprite;
 
   constructor(scene: GameScene, coordX: number, coordY: number) {
     super(scene, coordX, coordY);
-    this.sprite = this.scene.add.sprite(this.x, this.y, 'collector').setDepth(12).setAlpha(0.3);
+    this.sprite = this.scene.add.sprite(this.x, this.y, 'battery').setDepth(12).setAlpha(0.3);
   }
 
   static generateTextures(scene: Phaser.Scene) {
     const graphics = scene.add.graphics();
     const outer = GRID * 0.30;
     const inner = outer / 2;
-    graphics.fillStyle(0xd3d3d3, 1);
+    graphics.fillStyle(0x00ff00, 1);
     graphics.lineStyle(2, 0x777777, 1);
     graphics.fillCircle(HALF_GRID, HALF_GRID, outer);
     graphics.strokeCircle(HALF_GRID, HALF_GRID, outer);
     graphics.fillStyle(0xffffff, 1);
     graphics.fillCircle(HALF_GRID, HALF_GRID, inner);
     graphics.strokeCircle(HALF_GRID, HALF_GRID, inner);
-    graphics.generateTexture('collector', GRID, GRID);
+    graphics.generateTexture('battery', GRID, GRID);
     graphics.destroy();
   }
 }

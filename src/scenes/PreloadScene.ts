@@ -1,5 +1,6 @@
 import {GRID, SceneKeys} from '..';
-import { City } from '../City';
+import { Battery } from '../structures/Battery';
+import { City } from '../structures/City';
 import { Collector } from '../structures/Collector';
 import { Relay } from '../structures/Relay';
 
@@ -23,6 +24,7 @@ export default class PreloadScene extends Phaser.Scene {
     City.generateTextures(this);
     Collector.generateTextures(this);
     Relay.generateTextures(this);
+    Battery.generateTextures(this);
 
     // background cell white
     const graphics = this.add.graphics();

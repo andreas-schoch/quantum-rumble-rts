@@ -1,33 +1,29 @@
-import { Cell } from '../City';
+import { Cell } from './City';
 import GameScene from '../scenes/GameScene';
 import { GRID, WORLD_DATA } from '..';
 import { BaseStructure } from './BaseStructure';
 
 export class Weapon extends BaseStructure {
   name = 'Weapon';
-  relay = false;
+  isRelay = false;
   movable = true;
   connectionRange = 5;
   energyCollectionRange = 0;
   energyCollectionRate = 0;
   energyProduction = 0;
 
-  energyStorageCurrent = 0;
-  energyStorageMax = 0;
-  healthCurrent = 100;
+  energyStorageCapacity = 0;
   healthMax = 100;
-  ammoCurrent = 0;
   ammoMax = 10;
-  buildCost = 10;
-  buildCostPaid = 0;
+  buildCost = 5;
+  ammoCost = 0.25;
 
   updatePriority = 1;
 
   private graphics: Phaser.GameObjects.Graphics;
-  private buildEnergyReceived = 0;
   private attackRange = 5;
-  private lastAttackTime: number = -1;
-  private cooldown = 1000;
+  private attackCooldown = 5; // num ticks for now
+  lastAttack: number;
 
   static attackSFX: Phaser.Sound.BaseSound;
 
@@ -38,9 +34,9 @@ export class Weapon extends BaseStructure {
     this.draw();
   }
 
-  update(): void {
-    super.update();
-    this.attack();
+  tick(tickCounter: number): void {
+    super.tick(tickCounter);
+    this.attack(tickCounter);
   }
 
   move(coordX: number, coordY: number) {
@@ -53,15 +49,16 @@ export class Weapon extends BaseStructure {
     this.graphics.destroy();
   }
 
-  protected attack() {
-    if (this.ammoCurrent <= 0) return;
+  protected attack(tickCounter: number) {
+    if (this.ammoCurrent < this.ammoCost) return;
+    if (tickCounter - this.lastAttack <= this.attackCooldown) return;
 
-    if (Math.random() > 0.25) return; // TODO remove this once there are enemies
+    if (Math.random() > 0.6666) return; // TODO remove this once there are enemies
     // if (this.scene.game.getTime() - this.lastAttackTime > this.cooldown) return;
     // const nearestTarget = this.getNearestTarget();
     // if (!nearestTarget) return;
-    this.ammoCurrent--;
-    this.lastAttackTime = this.scene.game.getTime();
+    this.ammoCurrent -= this.ammoCost;
+    this.lastAttack = tickCounter;
     this.draw();
     Weapon.attackSFX.play();
   }
