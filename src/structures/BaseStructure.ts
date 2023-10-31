@@ -13,22 +13,17 @@ export abstract class BaseStructure {
   energyPath: PathfinderResult<{x: number, y: number}> = {found: false, distance: Infinity, path: []};
   static structuresInUpdatePriorityOrder: BaseStructure[] = [];
   static structuresById: Map<string, BaseStructure> = new Map();
-  static builtStructureIds: Set<string> = new Set();
   static activeStructureIds: Set<string> = new Set(); // only the ones in here will receive energy of any type
-  static damagedStructureIds: Set<string> = new Set(); // damaged structures are prioritized when delegating energy
-  static collectingStructureIds: Set<string> = new Set(); // only the ones in here will collect energy
 
   // Parameters
   abstract name: string;
   abstract isRelay: boolean; // whether this structure can relay energy
   abstract movable: boolean;
   abstract healthMax: number;
-  abstract ammoMax: number;
   abstract connectionRange: number; // max manhattan distance to other structures to be able to connect to them
   abstract energyCollectionRange: number; // max energy collection manhattan distance
   abstract updatePriority: number; // higher means it will be updated first
   abstract buildCost: number;
-  // abstract energyCollectionRate: number; // how much energy is collected per second per unclaimed cell in range
   abstract energyProduction: number; // different from collecting, this produces without the need to occupy cells
   abstract energyStorageCapacity: number;
   isEnergyRoot = false;
@@ -39,11 +34,12 @@ export abstract class BaseStructure {
   built = false;
   sprite: Phaser.GameObjects.Sprite | null = null;
   healthCurrent = 0;
-  ammoCurrent = 0;
   energyStorageCurrent = 0;
   speedIncrease = 0;
 
-  pendingEnergyRequests: Record<EnergyRequest['type'], EnergyRequest[]> = {'ammo': [], 'build': [], 'health': []};
+  pendingBuild: EnergyRequest[] = [];
+  pendingHealth: EnergyRequest[] = [];
+  // pendingEnergyByType: {[key: string]: EnergyRequest[]} = { build: this.pendingBuild, health: this.pendingHealth };
 
   constructor(scene: GameScene, coordX: number, coordY: number) {
     this.scene = scene;
@@ -56,30 +52,21 @@ export abstract class BaseStructure {
   }
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  tick(tickCounter: number) {
+  tick(tickCounter: number):  void | true {
     if (this.destroyed) return;
     if (!this.energyPath.found && !this.isEnergyRoot && !this.findPathAsyncInProgress) return this.findPathAsync();
-    if (!this.energyPath.found) return;
 
-    const energySource = BaseStructure.structuresById.get(this.energyPath.path[0].id);
-    if (!energySource) return;
-    let request: EnergyRequest | null = null;
+    if (!this.isEnergyRoot && !this.energyPath.found) return;
 
-    // TODO don't create the request here but in the network class. add id to pending requests array
-    if (!this.built && this.buildCost !== 0 && this.pendingEnergyRequests['build'].length < this.buildCost) {
-      request = this.scene.network.requestEnergy('build', 1, this);
-      console.log('------build', this.buildCost, this.pendingEnergyRequests['build'].length);
-    } else if (this.healthCurrent < this.healthMax && this.pendingEnergyRequests['health'].length < this.healthMax - this.healthCurrent) {
-      request = this.scene.network.requestEnergy('health', 1, this);
-    } else if (this.ammoCurrent < this.ammoMax && this.pendingEnergyRequests['ammo'].length < this.ammoMax - this.ammoCurrent) {
-      request = this.scene.network.requestEnergy('ammo', 1, this);
-    } else if (!this.built && this.buildCost === 0) {
+    // if (!BaseStructure.structuresById.has(this.energyPath.path[0].id)) return; // No energy source
+    if (!this.built && this.buildCost !== 0 && this.pendingBuild.length < this.buildCost)
+      this.pendingBuild.push(this.scene.network.requestEnergy('build', 1, this));
+    else if (this.healthCurrent < this.healthMax && this.pendingHealth.length < this.healthMax - this.healthCurrent)
+      this.pendingHealth.push(this.scene.network.requestEnergy('health', 1, this));
+    else if (!this.built && this.buildCost === 0)
       this.build(1);
-    }
-    // TODO move ammo stuff to BaseWeaponStructure?
 
-    // console.log('------pending', this.pendingEnergyRequests['build'].length);
-    if (request) this.pendingEnergyRequests[request.type].push(request);
+    return true;
   }
 
   activate() {
@@ -98,34 +85,25 @@ export abstract class BaseStructure {
     BaseStructure.activeStructureIds.delete(this.id);
     BaseStructure.structuresInUpdatePriorityOrder = BaseStructure.structuresInUpdatePriorityOrder.filter(s => s.id !== this.id);
     if (this.energyCollectionRange) this.scene.network.stopCollecting(this);
-    if (this.energyProduction) this.scene.network.energyProducing -= this.energyProduction;
-    if (this.energyStorageCapacity) this.scene.network.energyStorageMax -= this.energyStorageCapacity;
+    // if (this.energyProduction) this.scene.network.energyProducing -= this.energyProduction;
+    // if (this.energyStorageCapacity) this.scene.network.energyStorageMax -= this.energyStorageCapacity;
   }
 
   damage(amount: number) {
     this.healthCurrent = Math.max(this.healthCurrent - amount, 0);
     if (this.healthCurrent === 0) this.destroy();
-    else BaseStructure.damagedStructureIds.add(this.id);
   }
 
   receiveEnergy(request: EnergyRequest): void {
     if (this.destroyed) throw new Error('This structure is already destroyed');
-    this.pendingEnergyRequests[request.type] = this.pendingEnergyRequests[request.type].filter(r => r.id !== request.id);
     if (!request) throw new Error('This structure does not have a pending energy request with that id');
-
-    switch (request.type) {
-    case 'ammo':
-      this.ammoCurrent = Math.min(this.ammoCurrent + request.amount, this.ammoMax);
-      this.draw();
-      break;
-    case 'build':
+    if (request.type === 'build') {
       this.build(request.amount);
-      break;
-    case 'health':
+      this.pendingBuild = this.pendingBuild.filter(r => r.id !== request.id);
+    } else if (request.type === 'health') {
       this.heal(request.amount);
-      break;
+      this.pendingHealth = this.pendingHealth.filter(r => r.id !== request.id);
     }
-    console.log(this.built);
   }
 
   protected findPathAsync() {
@@ -137,24 +115,23 @@ export abstract class BaseStructure {
   }
 
   protected destroy() {
-    this.deactivate();
+    this.sprite?.destroy();
+    if (this.preview) return;
     this.destroyed = true;
+    this.deactivate();
     BaseStructure.structuresById.delete(this.id);
-    BaseStructure.damagedStructureIds.delete(this.id);
-    BaseStructure.collectingStructureIds.delete(this.id);
     BaseStructure.activeStructureIds.delete(this.id);
-    BaseStructure.builtStructureIds.delete(this.id);
     WORLD_DATA[this.coordY][this.coordX].ref = null;
     // TODO Base class does to much. Move specific stuff to subclasses
-    if (this.energyStorageCapacity) this.scene.network.energyStorageMax += this.energyStorageCapacity;
+    if (this.energyStorageCapacity) this.scene.network.energyStorageMax -= this.energyStorageCapacity;
+    if (this.energyProduction) this.scene.network.energyProducing -= this.energyProduction;
     if (this.speedIncrease) this.scene.network.speed -= this.speedIncrease;
-    this.sprite?.destroy();
+
   }
 
   protected heal(amount: number) {
     if (this.destroyed) throw new Error('This structure is already destroyed');
     this.healthCurrent = Math.min(this.healthCurrent + amount, this.healthMax);
-    if (this.healthCurrent === this.healthMax) BaseStructure.damagedStructureIds.delete(this.id);
   }
 
   protected build(amount: number) {
@@ -163,7 +140,6 @@ export abstract class BaseStructure {
     this.buildCost = Math.max(this.buildCost - amount, 0);
     if (this.buildCost <= 0) {
       if (this.energyCollectionRange) this.scene.network.startCollecting(this);
-      BaseStructure.builtStructureIds.add(this.id);
       this.healthCurrent = this.healthMax;
       if (this.energyProduction) this.scene.network.energyProducing += this.energyProduction;
       if (this.energyStorageCapacity) this.scene.network.energyStorageMax += this.energyStorageCapacity;
@@ -180,7 +156,7 @@ export abstract class BaseStructure {
     return WORLD_DATA[coordY][coordX].ref === null || WORLD_DATA[coordY][coordX].ref === this;
   }
 
-  move(coordX: number, coordY: number) {
+  move(coordX: number, coordY: number): void | true {
     if (WORLD_DATA[coordY][coordX].ref === this) return;
     if (!this.preview && (!this.movable || this.destroyed)) throw new Error('This structure is not movable or already destroyed');
     this.coordX = coordX;
@@ -201,6 +177,8 @@ export abstract class BaseStructure {
     } else {
       this.sprite && this.sprite.clearTint().setDepth(12);
     }
+
+    return true;
   }
 
   protected static drawStar (graphics: Phaser.GameObjects.Graphics, cx: number, cy: number, spikes: number, outerRadius: number, innerRadius: number) {

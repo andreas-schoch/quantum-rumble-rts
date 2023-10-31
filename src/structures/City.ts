@@ -45,12 +45,11 @@ export class City extends BaseStructure {
     this.textEnergyStorage = this.scene.add.text(this.x, this.y - HALF_GRID, '0/20').setDepth(500000).setOrigin(0.5, 0.5).setColor('red').setResolution(2).setFontSize(20);
     this.textEnergyCollection = this.scene.add.text(this.x, this.y + HALF_GRID, `+ ${this.scene.network.collectionSpriteSet.size * 0.005 + this.scene.network.energyProducing}`)
       .setDepth(500000).setOrigin(0.5, 0.5).setColor('darkgreen').setResolution(2);
-
     this.build(0);
   }
 
-  tick(tickCounter: number): void {
-    super.tick(tickCounter);
+  tick(tickCounter: number) {
+    if (!super.tick(tickCounter)) return;
     const network = this.scene.network;
     this.textEnergyStorage.setText(`${network.energyStorageCurrent.toFixed(0)}/${network.energyStorageMax}`);
     this.textEnergyStorage.setColor(network.energyDeficit ? 'red' : 'darkgreen');

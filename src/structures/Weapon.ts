@@ -1,4 +1,4 @@
-import { Cell } from './City';
+import { Cell, EnergyRequest } from './City';
 import GameScene from '../scenes/GameScene';
 import { GRID, WORLD_DATA } from '..';
 import { BaseStructure } from './BaseStructure';
@@ -9,21 +9,23 @@ export class Weapon extends BaseStructure {
   movable = true;
   connectionRange = 5;
   energyCollectionRange = 0;
-  energyCollectionRate = 0;
   energyProduction = 0;
 
   energyStorageCapacity = 0;
   healthMax = 100;
-  ammoMax = 10;
   buildCost = 5;
   ammoCost = 0.25;
 
   updatePriority = 1;
 
-  private graphics: Phaser.GameObjects.Graphics;
+  ammoMax = 10;
+  ammoCurrent = 0;
+  lastAttack: number;
   private attackRange = 5;
   private attackCooldown = 5; // num ticks for now
-  lastAttack: number;
+  private graphics: Phaser.GameObjects.Graphics;
+
+  pendingAmmo: EnergyRequest[] = [];
 
   static attackSFX: Phaser.Sound.BaseSound;
 
@@ -34,14 +36,28 @@ export class Weapon extends BaseStructure {
     this.draw();
   }
 
-  tick(tickCounter: number): void {
-    super.tick(tickCounter);
+  tick(tickCounter: number) {
+    if (!super.tick(tickCounter)) return;
+    console.log('tick', this.ammoCurrent, this.pendingAmmo.length);
+    if (this.built && this.ammoCurrent < this.ammoMax && this.pendingAmmo.length < this.ammoMax - this.ammoCurrent) {
+      console.log('tick reload');
+      this.pendingAmmo.push(this.scene.network.requestEnergy('ammo', 1, this));
+    }
     this.attack(tickCounter);
+    return true;
   }
 
   move(coordX: number, coordY: number) {
-    super.move(coordX, coordY);
+    if (!super.move(coordX, coordY)) return;
     this.draw();
+  }
+
+  receiveEnergy(request: EnergyRequest): void {
+    super.receiveEnergy(request);
+    if (request.type === 'ammo') {
+      this.ammoCurrent = Math.min(this.ammoCurrent + request.amount, this.ammoMax);
+      this.pendingAmmo = this.pendingAmmo.filter(r => r.id !== request.id);
+    }
   }
 
   protected destroy(): void {
