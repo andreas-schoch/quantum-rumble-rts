@@ -3,7 +3,7 @@ import GameScene from './scenes/GameScene';
 import { Graph, PathfinderResult } from './Graph';
 import { BaseStructure } from './structures/BaseStructure';
 import { Cell, City, Energy, EnergyRequest } from './structures/City';
-import { GRID, NETWORK_TRAVEL_SPEED, STRUCTURE_BY_NAME, TICK_DELTA, WORLD_DATA, WORLD_X, WORLD_Y } from '.';
+import { GRID, STRUCTURE_BY_NAME, TICK_DELTA, WORLD_DATA, WORLD_X, WORLD_Y } from '.';
 import { Remote, wrap } from 'comlink';
 
 export class Network {
@@ -21,7 +21,7 @@ export class Network {
   collectionSpriteSet: Set<Phaser.GameObjects.Sprite> = new Set();
 
   // State
-  speed = 300; // how many pixels energy balls travel per second
+  speed = 100; // how many pixels energy balls travel per second
   energyProducing = 0;
   energyCollecting = 0;
   energyStorageMax = 0;
@@ -98,7 +98,7 @@ export class Network {
     const path = this.scene.add.path(points[0], points[1]);
     for (let i = 2; i < points.length; i += 2) path.lineTo(points[i], points[i + 1]);
     const texture = request.type === 'ammo' ? 'energy_red' : 'energy';
-    const duration = (energyPath.distance / NETWORK_TRAVEL_SPEED) * 1000;
+    const duration = (energyPath.distance / this.speed) * 1000;
     const energyBall: Energy = {follower: this.scene.add.follower(path, points[0], points[1], texture), id: this.generateId()};
     energyBall.follower.setScale(1).setDepth(100);
     energyBall.follower.startFollow({duration, repeat: 0, onComplete: () => {

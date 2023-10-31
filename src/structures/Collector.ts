@@ -14,7 +14,7 @@ export class Collector extends BaseStructure {
   energyStorageCapacity = 0;
   healthMax = 1;
   ammoMax = 0;
-  buildCost = 5;
+  buildCost = 10;
 
   updatePriority = 2;
 

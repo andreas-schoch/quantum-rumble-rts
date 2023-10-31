@@ -41,6 +41,7 @@ export abstract class BaseStructure {
   healthCurrent = 0;
   ammoCurrent = 0;
   energyStorageCurrent = 0;
+  speedIncrease = 0;
 
   pendingEnergyRequests: Record<EnergyRequest['type'], EnergyRequest[]> = {'ammo': [], 'build': [], 'health': []};
 
@@ -144,6 +145,9 @@ export abstract class BaseStructure {
     BaseStructure.activeStructureIds.delete(this.id);
     BaseStructure.builtStructureIds.delete(this.id);
     WORLD_DATA[this.coordY][this.coordX].ref = null;
+    // TODO Base class does to much. Move specific stuff to subclasses
+    if (this.energyStorageCapacity) this.scene.network.energyStorageMax += this.energyStorageCapacity;
+    if (this.speedIncrease) this.scene.network.speed -= this.speedIncrease;
     this.sprite?.destroy();
   }
 
@@ -163,6 +167,7 @@ export abstract class BaseStructure {
       this.healthCurrent = this.healthMax;
       if (this.energyProduction) this.scene.network.energyProducing += this.energyProduction;
       if (this.energyStorageCapacity) this.scene.network.energyStorageMax += this.energyStorageCapacity;
+      if (this.speedIncrease) this.scene.network.speed += this.speedIncrease;
       this.sprite?.setAlpha(1);
       this.built = true;
       console.log('built------------', this.id);

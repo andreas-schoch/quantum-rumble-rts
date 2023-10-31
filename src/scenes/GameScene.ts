@@ -5,7 +5,9 @@ import { BaseStructure } from '../structures/BaseStructure';
 import { Collector } from '../structures/Collector';
 import { Relay } from '../structures/Relay';
 import { Weapon } from '../structures/Weapon';
-import { Battery } from '../structures/Battery';
+import { Storage } from '../structures/Storage';
+import { Reactor } from '../structures/Reactor';
+import { Speed } from '../structures/Speed';
 
 type CameraRotations = '0' | '90' | '180' | '270';
 export default class GameScene extends Phaser.Scene {
@@ -91,7 +93,8 @@ export default class GameScene extends Phaser.Scene {
     const keyTWO = keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.TWO);
     const keyTHREE = keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.THREE);
     const keyFOUR = keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.FOUR);
-    // const keyFIVE = keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.FIVE);
+    const keyFIVE = keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.FIVE);
+    const keySIX = keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.SIX);
     const keyESC = keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.ESC);
     const keyX = keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.X);
 
@@ -149,15 +152,20 @@ export default class GameScene extends Phaser.Scene {
       this.network.previewStructure(this.pointerCoordX, this.pointerCoordY, this.structureToBuild);
     };
     keyFOUR.onDown = () => {
-      this.structureToBuild = Battery.name;
+      this.structureToBuild = Storage.name;
       this.network.previewCancel();
       this.network.previewStructure(this.pointerCoordX, this.pointerCoordY, this.structureToBuild);
     };
-    // keyFIVE.onDown = () => {
-    //   this.structureToBuild = Relay.name;
-    //   this.network.previewCancel();
-    //   this.network.previewStructure(this.pointerCoordX, this.pointerCoordY, this.structureToBuild);
-    // };
+    keyFIVE.onDown = () => {
+      this.structureToBuild = Reactor.name;
+      this.network.previewCancel();
+      this.network.previewStructure(this.pointerCoordX, this.pointerCoordY, this.structureToBuild);
+    };
+    keySIX.onDown = () => {
+      this.structureToBuild = Speed.name;
+      this.network.previewCancel();
+      this.network.previewStructure(this.pointerCoordX, this.pointerCoordY, this.structureToBuild);
+    };
     keyESC.onDown = () => {
       this.structureToBuild = null;
       this.network.previewCancel();

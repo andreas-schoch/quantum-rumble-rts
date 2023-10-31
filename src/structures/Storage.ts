@@ -2,8 +2,8 @@ import { GRID, HALF_GRID } from '..';
 import GameScene from '../scenes/GameScene';
 import { BaseStructure } from './BaseStructure';
 
-export class Battery extends BaseStructure {
-  name = 'Battery';
+export class Storage extends BaseStructure {
+  name = 'Storage';
   isRelay = false;
   movable = false;
   connectionRange = 5;
@@ -11,10 +11,10 @@ export class Battery extends BaseStructure {
   energyCollectionRate = 0;
   energyProduction = 0;
 
-  energyStorageCapacity = 10;
+  energyStorageCapacity = 20;
   healthMax = 5;
   ammoMax = 0;
-  buildCost = 10;
+  buildCost = 20;
 
   updatePriority = 10;
 
@@ -22,7 +22,7 @@ export class Battery extends BaseStructure {
 
   constructor(scene: GameScene, coordX: number, coordY: number) {
     super(scene, coordX, coordY);
-    this.sprite = this.scene.add.sprite(this.x, this.y, 'battery').setDepth(12).setAlpha(0.3);
+    this.sprite = this.scene.add.sprite(this.x, this.y, 'storage').setDepth(12).setAlpha(0.3);
   }
 
   static generateTextures(scene: Phaser.Scene) {
@@ -36,7 +36,7 @@ export class Battery extends BaseStructure {
     graphics.fillStyle(0xffffff, 1);
     graphics.fillCircle(HALF_GRID, HALF_GRID, inner);
     graphics.strokeCircle(HALF_GRID, HALF_GRID, inner);
-    graphics.generateTexture('battery', GRID, GRID);
+    graphics.generateTexture('storage', GRID, GRID);
     graphics.destroy();
   }
 }

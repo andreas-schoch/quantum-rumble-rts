@@ -5,7 +5,9 @@ import { Weapon } from './structures/Weapon';
 import { Collector } from './structures/Collector';
 import { Cell, City } from './structures/City';
 import { Relay } from './structures/Relay';
-import { Battery } from './structures/Battery';
+import { Storage } from './structures/Storage';
+import { Reactor } from './structures/Reactor';
+import { Speed } from './structures/Speed';
 
 export const SETTINGS_KEY_RESOLUTION = 'quantum_rumble_resolution';
 
@@ -24,14 +26,15 @@ export const WORLD_DATA: Cell[][] = []; // TODO maybe temporary until deciding w
 
 export const TICK_RATE = 50; // ms
 export const TICK_DELTA = TICK_RATE / 1000; // it's easier to change tickrate when things are scaled to a second
-export const NETWORK_TRAVEL_SPEED = 100; // pixels per second
 
 export const STRUCTURE_BY_NAME = {
   [Weapon.name]: Weapon,
   [Collector.name]: Collector,
   [City.name]: City,
   [Relay.name]: Relay,
-  [Battery.name]: Battery,
+  [Storage.name]: Storage,
+  [Reactor.name]: Reactor,
+  [Speed.name]: Speed,
 };
 
 export const enum SceneKeys {
