@@ -8,7 +8,7 @@ import { Weapon } from '../structures/Weapon';
 import { Storage } from '../structures/Storage';
 import { Reactor } from '../structures/Reactor';
 import { Speed } from '../structures/Speed';
-import { TerrainDestructible } from '../Enemy/CreeperFlow';
+import { CreeperFlow } from '../Enemy/CreeperFlow';
 
 type CameraRotations = '0' | '90' | '180' | '270';
 export default class GameScene extends Phaser.Scene {
@@ -25,7 +25,7 @@ export default class GameScene extends Phaser.Scene {
   sfx_start_collect: Phaser.Sound.BaseSound;
   sfx_place_structure: Phaser.Sound.BaseSound;
   tickCounter: number;
-  terrain: TerrainDestructible;
+  creeperFlow: CreeperFlow;
 
   constructor() {
     super({key: SceneKeys.GAME_SCENE});
@@ -39,7 +39,7 @@ export default class GameScene extends Phaser.Scene {
   }
 
   private create() {
-    this.terrain = new TerrainDestructible(this, GRID, {squareSize: GRID, numSquaresX: WORLD_X, numSquaresY: WORLD_Y, tileDensityMax: 128, tileDensityThreshold: 64});
+    this.creeperFlow = new CreeperFlow(this, {squareSize: GRID, numSquaresX: WORLD_X, numSquaresY: WORLD_Y, tileDensityMax: 128, tileDensityThreshold: 64});
     this.sfx_start_collect = this.sound.add('start_collect', {detune: 600, rate: 1.25, volume: 0.5 , loop: false});
     this.sfx_place_structure = this.sound.add('place_structure', {detune: 200, rate: 1.25, volume: 1 , loop: false});
 
@@ -52,6 +52,19 @@ export default class GameScene extends Phaser.Scene {
     this.network.placeStructure(this.city.coordX, this.city.coordY, this.city);
     this.network.startCollecting(this.city);
 
+    const id = this.creeperFlow.addEmitter(40, 40, 1000);
+    const id2 = this.creeperFlow.addEmitter(70, 70, 2000);
+    setTimeout(() => {
+      this.creeperFlow.removeEmitter(id);
+      this.creeperFlow.removeEmitter(id2);
+    }, 5000);
+
+    // setInterval(() => {
+    // // this.terrain.generateVertices((x, y) => {
+    //   // this.terrain.generateRandomTerrain();
+    //   this.terrain.diffuse();
+    //   this.terrain.update();
+    // }, 1000/30);
 
     this.tickCounter = 0;
     // Only rendering related things should happen every frame. I potentially want to be able to simulate this game on a server, so it needs to be somewhat deterministic
@@ -60,6 +73,8 @@ export default class GameScene extends Phaser.Scene {
       timeScale: 1,
       callback: () => {
         // console.time('tick');
+        this.creeperFlow.diffuse();
+        this.creeperFlow.update();
         this.tickCounter++;
         this.network.tick(this.tickCounter);
         // this.city.tick(this.tickCounter);
@@ -73,7 +88,6 @@ export default class GameScene extends Phaser.Scene {
 
   update(time: number, delta: number) {
     this.controls.update(delta);
-    this.terrain.update();
   }
 
   private setupCameraAndInput() {

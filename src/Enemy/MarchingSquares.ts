@@ -4,6 +4,8 @@ export interface IMarchingSquaresConfig {
   squareSize: number;
 }
 
+export type vec2 = { x: number; y: number };
+
 /** Represents a single "Marching Square */
 export interface ISquareDensityData {
   /** topLeft corner Density */
@@ -24,7 +26,7 @@ export interface ISquareDensityData {
 
 export interface ISquareGeomData {
   // polygons: Phaser.Geom.Polygon[];
-  polygons: [number, number][][];
+  polygons: vec2[][];
   isoLines: Phaser.Geom.Line[];
   shapeIndex: number;
 }
@@ -51,7 +53,7 @@ const DEFAULT_CONFIG: IMarchingSquaresConfig = {
 export class MarchingSquaresLookup {
   // TODO this is kind of like an intentional memory leak as there are millions of possible variations.
   //  Measure whether this is really worth it and how large it becomes after 30 mins of constantly generating random terrain
-  private polygonCache: Map<string, ISquareGeomData> = new Map();
+  polygonCache: Map<string, ISquareGeomData> = new Map();
   private readonly polygonLookupFactory: ((c: ISquareDensityData) => ISquareGeomDataRaw)[];
   private readonly config: IMarchingSquaresConfig;
 
@@ -131,14 +133,14 @@ export class MarchingSquaresLookup {
   }
 
   private createGeomData(dataRaw: ISquareGeomDataRaw, shapeIndex: number): ISquareGeomData {
-    const polygons: Phaser.Geom.Polygon[] = [];
     // const polygons: Phaser.Geom.Polygon[] = [];
+    // // const polygons: Phaser.Geom.Polygon[] = [];
     const isoLines: Phaser.Geom.Line[] = [];
 
     // Iterate over outer array which represents a single polygon
     for (let i = 0; i < dataRaw.p.length; i++) {
-      // Create a single polygon
-      // const points: [number, number][] = dataRaw.p[i];
+    // Create a single polygon
+    // const points: [number, number][] = dataRaw.p[i];
       const points = dataRaw.p[i];
       // polygons.push(new Phaser.Geom.Polygon(points));
       // Create iso lines for that single polygon
@@ -147,7 +149,9 @@ export class MarchingSquaresLookup {
       }
     }
 
-    return {polygons: dataRaw.p, isoLines, shapeIndex};
+    const polygons: vec2[][] = dataRaw.p.map(points => points.filter(v => v.length === 2).map(([x, y]) => ({x, y})));
+
+    return {polygons: polygons, isoLines, shapeIndex};
   }
 
   private getHashKey(data: ISquareDensityData, index?: number): string {
