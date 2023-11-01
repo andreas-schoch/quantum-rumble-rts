@@ -54,10 +54,10 @@ export default class GameScene extends Phaser.Scene {
 
     const id = this.creeperFlow.addEmitter(40, 40, 1000);
     const id2 = this.creeperFlow.addEmitter(70, 70, 2000);
-    setTimeout(() => {
-      this.creeperFlow.removeEmitter(id);
-      this.creeperFlow.removeEmitter(id2);
-    }, 5000);
+    // setTimeout(() => {
+    //   this.creeperFlow.removeEmitter(id);
+    //   this.creeperFlow.removeEmitter(id2);
+    // }, 5000);
 
     // setInterval(() => {
     // // this.terrain.generateVertices((x, y) => {
@@ -69,7 +69,7 @@ export default class GameScene extends Phaser.Scene {
     this.tickCounter = 0;
     // Only rendering related things should happen every frame. I potentially want to be able to simulate this game on a server, so it needs to be somewhat deterministic
     this.time.addEvent({
-      delay: TICK_RATE,
+      delay: 50,
       timeScale: 1,
       callback: () => {
         // console.time('tick');

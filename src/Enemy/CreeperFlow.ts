@@ -87,69 +87,81 @@ export class CreeperFlow {
   }
 
   public diffuse(): void {
+    console.time('diffuse');
     const {numSquaresX, numSquaresY, tileDensityMax, tileDensityThreshold} = this.config;
-    for (const emitter of this.emitters) this.density[emitter.yCoord][emitter.xCoord] += Math.min(emitter.intensity);
+    for (const emitter of this.emitters) this.density[emitter.yCoord][emitter.xCoord] += emitter.intensity;
+
+    // update prevDensity
+    for (let y = 0; y < numSquaresY; y++) {
+      for (let x = 0; x < numSquaresX; x++) {
+        this.prevDensity[y][x] = this.density[y][x];
+      }
+    }
 
     // Iterate over the entire density grid
     for (let y = 0; y < numSquaresY; y++) {
-      const rowCreeper = this.density[y];
+      // const y = y1 % 2 === 0 ? numSquaresY - y1 : y1; // Alternate vertical scan direction
+      // const rowCreeper = this.density[y];
+      for (let x = 0; x < numSquaresX; x++) {
+        // const x = y % 2 !== 0 ? numSquaresX - x1 : x1; // Alternate horizontal scan direction
+        const remainingDensity = this.prevDensity[y][x];
+        // this.prevDensity[y][x] -= remainingDensity <= tileDensityThreshold ? 0.1 : 0.05;
+        this.density[y][x] *= this.prevDensity[y][x] <= tileDensityThreshold ? 0.9 : 1;
+        if (remainingDensity < tileDensityThreshold) continue;
 
-      for (let x1 = 0; x1 < numSquaresX; x1++) {
-        const x = y % 2 === 0 ? numSquaresX - x1 : x1; // Alternate horizontal scan direction
-        let remainingDensity = rowCreeper[x];
-        rowCreeper[x] -= remainingDensity <= tileDensityThreshold ? 0.1 : 0.05;
-        if (remainingDensity <= 0) continue;
+        try {
+          const densityDown = y < numSquaresY - 1 ? this.prevDensity[y + 1][x] : tileDensityMax;
+          const densityLeft = x > 0 ? this.prevDensity[y][x - 1] : tileDensityMax;
+          const densityUp = y > 0 ? this.prevDensity[y - 1][x] : tileDensityMax;
+          const densityRight = x < numSquaresX - 1 ? this.prevDensity[y][x + 1] : tileDensityMax;
 
-        // Try flowing down
-        const availableDensityDown = y < numSquaresY - 1 ? tileDensityMax - this.density[y + 1][x] : 0;
-        if (y < numSquaresY - 1 && availableDensityDown && this.density[y + 1][x] < remainingDensity) {
-          const average = (remainingDensity + this.density[y + 1][x]) / 2;
-          this.density[y + 1][x] = average;
-          rowCreeper[x] = average;
-        }
+          // This gives kind of an interesting effect that looks a bit alien and aggressive
+          // if (densityDown < tileDensityThreshold + -20 && densityLeft < tileDensityThreshold + -1 && densityUp < tileDensityThreshold + -1 && densityRight < tileDensityThreshold + -1 && remainingDensity < tileDensityThreshold + -1) continue;
 
-        remainingDensity = rowCreeper[x];
-        if (remainingDensity <= 0) continue;
+          const canFlowDown = densityDown < remainingDensity;
+          const canFlowLeft = densityLeft < remainingDensity;
+          const canFlowUp = densityUp < remainingDensity;
+          const canFlowRight = densityRight < remainingDensity;
 
-        // Try flowing left
-        const availableDensityLeft = tileDensityMax - rowCreeper[x - 1];
-        if (x > 0 && availableDensityLeft && rowCreeper[x - 1] < remainingDensity) {
-          const average = (remainingDensity + rowCreeper[x - 1]) / 2;
-          rowCreeper[x - 1] = average;
-          rowCreeper[x] = average;
-        }
+          const totalFlowDirections = (canFlowDown ? 1 : 0) + (canFlowLeft ? 1 : 0) + (canFlowUp ? 1 : 0) + (canFlowRight ? 1 : 0);
 
-        remainingDensity = rowCreeper[x];
-        if (remainingDensity <= 0) continue;
+          let totalDiff = 0;
+          if (canFlowDown) totalDiff += (remainingDensity - densityDown);
+          if (canFlowLeft) totalDiff += (remainingDensity - densityLeft);
+          if (canFlowUp) totalDiff += (remainingDensity - densityUp);
+          if (canFlowRight) totalDiff += (remainingDensity - densityRight);
 
-        // Try flowing up
-        const availableDensityUp = y > 0 ? tileDensityMax - this.density[y - 1][x] : 0;
-        if (y > 0 && availableDensityUp && this.density[y - 1][x] < remainingDensity) {
-          const average = (remainingDensity + this.density[y - 1][x]) / 2;
-          this.density[y - 1][x] = average;
-          rowCreeper[x] = average;
-        }
+          if (totalFlowDirections === 0) continue;
+          if (totalDiff === 0) continue;
 
-        remainingDensity = rowCreeper[x];
-        if (remainingDensity <= 0) continue;
+          const weightDown = canFlowDown ? (remainingDensity - densityDown) / totalDiff : 0;
+          const weightLeft = canFlowLeft ? (remainingDensity - densityLeft) / totalDiff : 0;
+          const weightUp = canFlowUp ? (remainingDensity - densityUp) / totalDiff : 0;
+          const weightRight = canFlowRight ? (remainingDensity - densityRight) / totalDiff : 0;
 
-        // Try flowing right
-        const availableDensityRight = tileDensityMax - rowCreeper[x + 1];
-        if (x < numSquaresX - 1 && availableDensityRight && rowCreeper[x + 1] < remainingDensity) {
-          const average = (remainingDensity + rowCreeper[x + 1]) / 2;
-          rowCreeper[x + 1] = average;
-          rowCreeper[x] = average;
+          const halfRemainingDensity = (remainingDensity / 2) * 0.1;
+
+          if (weightDown) this.density[y + 1][x] += halfRemainingDensity * weightDown;
+          if (weightLeft) this.density[y][x - 1] += halfRemainingDensity * weightLeft;
+          if (weightUp) this.density[y - 1][x] += halfRemainingDensity * weightUp;
+          if (weightRight) this.density[y][x + 1] += halfRemainingDensity * weightRight;
+
+          this.density[y][x] -= halfRemainingDensity;
+
+        } catch (e) {
+          continue;
         }
       }
     }
 
     this.renderQueue.push({x: 0, y: 0, numSquaresX: this.config.numSquaresX, numSquaresY: this.config.numSquaresY, materialIndex: 0});
+    console.timeEnd('diffuse');
   }
 
   update() {
     if (!this.renderQueue.length) return;
     const graphics = this.terrainGraphics;
-    console.time('updateTerrain');
+    // console.time('updateTerrain');
     graphics.clear();
     this.renderQueue.forEach((bounds) => {
       graphics.translateCanvas(0, 0);
@@ -162,7 +174,7 @@ export class CreeperFlow {
     });
 
     this.renderQueue.length = 0;
-    console.timeEnd('updateTerrain');
+    // console.timeEnd('updateTerrain');
     // console.log('-------cache size after update', this.marchingSquares.polygonCache.size);
   }
 
