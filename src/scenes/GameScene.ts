@@ -26,6 +26,8 @@ export default class GameScene extends Phaser.Scene {
   sfx_place_structure: Phaser.Sound.BaseSound;
   tickCounter: number;
   creeperFlow: CreeperFlow;
+  // creeperFlow2: CreeperFlow;
+  // creeperFlow3: CreeperFlow;
 
   constructor() {
     super({key: SceneKeys.GAME_SCENE});
@@ -39,7 +41,9 @@ export default class GameScene extends Phaser.Scene {
   }
 
   private create() {
-    this.creeperFlow = new CreeperFlow(this, {squareSize: GRID, numSquaresX: WORLD_X, numSquaresY: WORLD_Y, tileDensityMax: 128, tileDensityThreshold: 64});
+    // this.creeperFlow = new CreeperFlow(this, {squareSize: GRID, numSquaresX: WORLD_X - 1, numSquaresY: WORLD_Y, tileDensityMax: 32 * 10, tileDensityThreshold: 16 * 4});
+    // this.creeperFlow2 = new CreeperFlow(this, {squareSize: GRID, numSquaresX: WORLD_X - 1, numSquaresY: WORLD_Y, tileDensityMax: 32 * 10, tileDensityThreshold: 16 * 2});
+    this.creeperFlow = new CreeperFlow(this, {squareSize: GRID, numSquaresX: WORLD_X - 1, numSquaresY: WORLD_Y, tileDensityMax: 32 * 9, tileDensityThreshold: [32]});
     this.sfx_start_collect = this.sound.add('start_collect', {detune: 600, rate: 1.25, volume: 0.5 , loop: false});
     this.sfx_place_structure = this.sound.add('place_structure', {detune: 200, rate: 1.25, volume: 1 , loop: false});
 
@@ -52,34 +56,23 @@ export default class GameScene extends Phaser.Scene {
     this.network.placeStructure(this.city.coordX, this.city.coordY, this.city);
     this.network.startCollecting(this.city);
 
-    const id = this.creeperFlow.addEmitter(40, 40, 1000);
-    const id2 = this.creeperFlow.addEmitter(70, 70, 2000);
-    // setTimeout(() => {
-    //   this.creeperFlow.removeEmitter(id);
-    //   this.creeperFlow.removeEmitter(id2);
-    // }, 5000);
-
-    // setInterval(() => {
-    // // this.terrain.generateVertices((x, y) => {
-    //   // this.terrain.generateRandomTerrain();
-    //   this.terrain.diffuse();
-    //   this.terrain.update();
-    // }, 1000/30);
+    this.creeperFlow.addEmitter(5, 25, 512);
+    this.creeperFlow.addEmitter(10, 70, 128);
 
     this.tickCounter = 0;
     // Only rendering related things should happen every frame. I potentially want to be able to simulate this game on a server, so it needs to be somewhat deterministic
     this.time.addEvent({
-      delay: 50,
+      delay: TICK_RATE,
       timeScale: 1,
       callback: () => {
-        // console.time('tick');
-        this.creeperFlow.diffuse();
-        this.creeperFlow.update();
+        console.time('tick');
         this.tickCounter++;
+        this.creeperFlow.diffuse(this.tickCounter);
+        this.creeperFlow.update();
+        console.timeEnd('tick');
         this.network.tick(this.tickCounter);
-        // this.city.tick(this.tickCounter);
+        this.city.tick(this.tickCounter);
         for(const structure of BaseStructure.structuresInUpdatePriorityOrder) structure.tick(this.tickCounter);
-        // console.timeEnd('tick');
       },
       callbackScope: this,
       loop: true

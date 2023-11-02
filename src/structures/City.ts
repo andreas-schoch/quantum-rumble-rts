@@ -27,8 +27,8 @@ export class City extends BaseStructure {
   connectionRange = 10;
   energyCollectionRange = 4;
   energyCollectionRate = 0;
-  energyProduction = 0.8;
-  energyStorageCapacity = 20;
+  energyProduction = 0.8 * 500;
+  energyStorageCapacity = 2000;
 
   healthMax = 500;
   ammoMax = 0;

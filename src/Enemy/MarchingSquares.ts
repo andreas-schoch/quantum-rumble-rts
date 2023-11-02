@@ -1,6 +1,8 @@
+import { GRID } from '..';
+
 export interface IMarchingSquaresConfig {
   densityMax: number;
-  densityThreshold: number;
+  // densityThreshold: number;
   squareSize: number;
 }
 
@@ -29,6 +31,7 @@ export interface ISquareGeomData {
   polygons: vec2[][];
   isoLines: Phaser.Geom.Line[];
   shapeIndex: number;
+  hash?: string;
 }
 
 /** Used to create ISquareGeomData. Only to be used internally */
@@ -45,7 +48,7 @@ interface ISquareGeomDataRaw {
 
 const DEFAULT_CONFIG: IMarchingSquaresConfig = {
   densityMax: 128,
-  densityThreshold: 64,
+  // densityThreshold: 64,
   squareSize: 32,
 };
 
@@ -62,56 +65,27 @@ export class MarchingSquaresLookup {
 
     const l = this.ilerp;
     const s = config.squareSize;
-    // this.polygonLookupFactory = [
-    //   e => ({p: [], l: []}),
-    //   e => ({p: [[0, l(e.tl, e.bl), l(e.bl, e.br), s, 0, s]], l: [[0]]}),
-    //   e => ({p: [[l(e.bl, e.br), s, s, l(e.tr, e.br), s, s]], l: [[0]]}),
-    //   e => ({p: [[0, l(e.tl, e.bl), s, l(e.tr, e.br), s, s, 0, s]], l: [[0]]}),
-    //
-    //   e => ({p: [[s, l(e.tr, e.br), l(e.tl, e.tr), 0, s, 0]], l: [[0]]}),
-    //   e => ({p: [[0, l(e.tl, e.bl), l(e.bl, e.br), s, 0, s], [s, l(e.tr, e.br), l(e.tl, e.tr), 0, s, 0]], l: [[0], [0]]}),
-    //   // e => ({p: [[0, l(e.tl, e.bl), 0, 0, l(e.tl, e.tr), 0], [s, l(e.tr, e.br), s, s, l(e.bl, e.br), s]], l: [[0], [0]]}),
-    //
-    //   e => ({p: [[l(e.bl, e.br), s, l(e.tl, e.tr), 0, s, 0, s, s]], l: [[0]]}),
-    //   e => ({p: [[l(e.tl, e.tr), 0, 0, l(e.tl, e.bl), 0, s, s, s, s, 0]], l: [[0]]}),
-    //
-    //   e => ({p: [[l(e.tl, e.tr), 0, 0, l(e.tl, e.bl), 0, 0]], l: [[0]]}),
-    //   e => ({p: [[l(e.tl, e.tr), 0, l(e.bl, e.br), s, 0, s, 0, 0]], l: [[0]]}),
-    //   e => ({p: [[0, 0, l(e.tl, e.tr), 0, s, l(e.tr, e.br), s, s, l(e.bl, e.br), s, 0, l(e.tl, e.bl)]], l: [[1, 2]]}),
-    //   // e => ({p: [[0, s, 0, l(e.tl, e.bl), l(e.tl, e.tr), 0, s, 0, s, l(e.tr, e.br), l(e.bl, e.br), s]], l: [[1, 2]]}),
-    //
-    //   e => ({p: [[0, 0, l(e.tl, e.tr), 0, s, l(e.tr, e.br), s, s, 0, s]], l: [[2]]}),
-    //
-    //   e => ({p: [[0, 0, s, 0, s, l(e.tr, e.br), 0, l(e.tl, e.bl)]], l: [[2]]}),
-    //   e => ({p: [[0, 0, s, 0, s, l(e.tr, e.br), l(e.bl, e.br), s, 0, s]], l: [[1]]}),
-    //   e => ({p: [[0, 0, s, 0, s, s, l(e.bl, e.br), s, 0, l(e.tl, e.bl)]], l: [[3]]}),
-    //   e => ({p: [[0, 0, s, 0, s, s, 0, s]], l: [[]]}),
-    //   // Extra paths for the 2 ambiguous cases
-    //   // e => ({p: [[0, l(e.tl, e.bl), 0, 0, l(e.tl, e.tr), 0], [s, l(e.tr, e.br), s, s, l(e.bl, e.br), s]], l: [[0], [0]]}),
-    //   // e => ({p: [[0, s, 0, l(e.tl, e.bl), l(e.tl, e.tr), 0, s, 0, s, l(e.tr, e.br), l(e.bl, e.br), s]], l: [[1, 2]]}),
-    // ];
-
     // TODO at least one of the iso-lines has the wrong start index defined. Verify each one
     this.polygonLookupFactory = [
-      e => ({p: [], l: []}),
-      e => ({p: [[[0, l(e.tl, e.bl)], [l(e.bl, e.br), s], [0, s]]], l: [[0]]}),
-      e => ({p: [[[l(e.bl, e.br), s], [s, l(e.tr, e.br)], [s, s]]], l: [[0]]}),
-      e => ({p: [[[0, l(e.tl, e.bl)], [s, l(e.tr, e.br)], [s, s], [0, s]]], l: [[0]]}),
+      () => ({p: [], l: []}),
+      e => ({p: [[[0, l(e.tl, e.bl, e.threshold)], [l(e.bl, e.br, e.threshold), s], [0, s]]], l: [[0]]}),
+      e => ({p: [[[l(e.bl, e.br, e.threshold), s], [s, l(e.tr, e.br, e.threshold)], [s, s]]], l: [[0]]}),
+      e => ({p: [[[0, l(e.tl, e.bl, e.threshold)], [s, l(e.tr, e.br, e.threshold)], [s, s], [0, s]]], l: [[0]]}),
 
-      e => ({p: [[[s, l(e.tr, e.br)], [l(e.tl, e.tr), 0], [s, 0]]], l: [[0]]}),
-      e => ({p: [[[0, l(e.tl, e.bl)], [l(e.bl, e.br), s], [0, s]], [[s, l(e.tr, e.br)], [l(e.tl, e.tr), 0], [s, 0]]], l: [[0], [0]]}),
-      e => ({p: [[[l(e.bl, e.br), s], [l(e.tl, e.tr), 0], [s, 0], [s, s]]], l: [[0]]}),
-      e => ({p: [[[l(e.tl, e.tr), 0], [0, l(e.tl, e.bl)], [0, s], [s, s], [s, 0]]], l: [[0]]}),
+      e => ({p: [[[s, l(e.tr, e.br, e.threshold)], [l(e.tl, e.tr, e.threshold), 0], [s, 0]]], l: [[0]]}),
+      e => ({p: [[[0, l(e.tl, e.bl, e.threshold)], [l(e.bl, e.br, e.threshold), s], [0, s]], [[s, l(e.tr, e.br, e.threshold)], [l(e.tl, e.tr, e.threshold), 0], [s, 0]]], l: [[0], [0]]}),
+      e => ({p: [[[l(e.bl, e.br, e.threshold), s], [l(e.tl, e.tr, e.threshold), 0], [s, 0], [s, s]]], l: [[0]]}),
+      e => ({p: [[[l(e.tl, e.tr, e.threshold), 0], [0, l(e.tl, e.bl, e.threshold)], [0, s], [s, s], [s, 0]]], l: [[0]]}),
 
-      e => ({p: [[[l(e.tl, e.tr), 0], [0, l(e.tl, e.bl)], [0, 0]]], l: [[0]]}),
-      e => ({p: [[[l(e.tl, e.tr), 0], [l(e.bl, e.br), s], [0, s], [0, 0]]], l: [[0]]}),
-      e => ({p: [[[0, 0], [l(e.tl, e.tr), 0], [s, l(e.tr, e.br)], [s, s], [l(e.bl, e.br), s], [0, l(e.tl, e.bl)]]], l: [[1, 4]]}),
-      e => ({p: [[[0, 0], [l(e.tl, e.tr), 0], [s, l(e.tr, e.br)], [s, s], [0, s]]], l: [[1]]}),
+      e => ({p: [[[l(e.tl, e.tr, e.threshold), 0], [0, l(e.tl, e.bl, e.threshold)], [0, 0]]], l: [[0]]}),
+      e => ({p: [[[l(e.tl, e.tr, e.threshold), 0], [l(e.bl, e.br, e.threshold), s], [0, s], [0, 0]]], l: [[0]]}),
+      e => ({p: [[[0, 0], [l(e.tl, e.tr, e.threshold), 0], [s, l(e.tr, e.br, e.threshold)], [s, s], [l(e.bl, e.br, e.threshold), s], [0, l(e.tl, e.bl, e.threshold)]]], l: [[1, 4]]}),
+      e => ({p: [[[0, 0], [l(e.tl, e.tr, e.threshold), 0], [s, l(e.tr, e.br, e.threshold)], [s, s], [0, s]]], l: [[1]]}),
 
-      e => ({p: [[[0, 0], [s, 0], [s, l(e.tr, e.br)], [0, l(e.tl, e.bl)]]], l: [[2]]}),
-      e => ({p: [[[0, 0], [s, 0], [s, l(e.tr, e.br)], [l(e.bl, e.br), s], [0, s]]], l: [[2]]}),
-      e => ({p: [[[0, 0], [s, 0], [s, s], [l(e.bl, e.br), s], [0, l(e.tl, e.bl)]]], l: [[3]]}),
-      e => ({p: [[[0, 0], [s, 0], [s, s], [0, s]]], l: [[]]}),
+      e => ({p: [[[0, 0], [s, 0], [s, l(e.tr, e.br, e.threshold)], [0, l(e.tl, e.bl, e.threshold)]]], l: [[2]]}),
+      e => ({p: [[[0, 0], [s, 0], [s, l(e.tr, e.br, e.threshold)], [l(e.bl, e.br, e.threshold), s], [0, s]]], l: [[2]]}),
+      e => ({p: [[[0, 0], [s, 0], [s, s], [l(e.bl, e.br, e.threshold), s], [0, l(e.tl, e.bl, e.threshold)]]], l: [[3]]}),
+      () => ({p: [[[0, 0], [s, 0], [s, s], [0, s]]], l: [[]]}),
       // Extra paths for the 2 ambiguous cases TODO select according to edge densities
       // e => ({p: [[0, l(e.tl, e.bl), 0, 0, l(e.tl, e.tr), 0], [s, l(e.tr, e.br), s, s, l(e.bl, e.br), s]], l: [[0], [0]]}),
       // e => ({p: [[0, s, 0, l(e.tl, e.bl), l(e.tl, e.tr), 0, s, 0, s, l(e.tr, e.br), l(e.bl, e.br), s]], l: [[1, 2]]}),
@@ -120,7 +94,9 @@ export class MarchingSquaresLookup {
 
   getSquareGeomData(densityData: ISquareDensityData): ISquareGeomData {
     const shapeIndex = this.getShapeIndex(densityData);
-    if (shapeIndex === 0) return ({polygons: [], isoLines: [], shapeIndex: 0});
+    // TODO get rid of polygonLookupFactory and do it inline here
+    if (shapeIndex === 0) return ({polygons: [], isoLines: [], shapeIndex: 0, hash: 'empty-square'});
+    if (shapeIndex === 15) return ({polygons: [[{x: 0, y: 0}, {x: GRID, y: 0}, {x: GRID, y: GRID}, {x: 0, y: GRID}]], isoLines: [], shapeIndex: 15, hash: 'full-square'});
 
     const hash: string = this.getHashKey(densityData, shapeIndex);
     const cachedData: ISquareGeomData | undefined = this.polygonCache.get(hash);
@@ -156,15 +132,14 @@ export class MarchingSquaresLookup {
 
   private getHashKey(data: ISquareDensityData, index?: number): string {
     index = index || this.getShapeIndex(data);
+    if (index === 0) return 'empty-square';
     if (index === 15) return 'full-square';
     const {tl, tr, br, bl} = MarchingSquaresLookup.floorDensityValues(data);
     return `${tl}-${tr}-${br}-${bl}`;
   }
 
   private getShapeIndex(data: ISquareDensityData): number {
-    const {tl, tr, br, bl} = data;
-    const threshold = this.config.densityThreshold;
-
+    const {tl, tr, br, bl, threshold} = data;
     const val1 = tl >= threshold ? 8 : 0;
     const val2 = tr >= threshold ? 4 : 0;
     const val3 = br >= threshold ? 2 : 0;
@@ -173,8 +148,8 @@ export class MarchingSquaresLookup {
   }
 
   /** Inverse lerp */
-  private ilerp = (eA: number, eB: number): number => {
-    return ((this.config.densityThreshold - eA) / (eB - eA)) * this.config.squareSize;
+  private ilerp = (eA: number, eB: number, threshold: number): number => {
+    return ((threshold - eA) / (eB - eA)) * GRID;
   };
 
   private static floorDensityValues(data: ISquareDensityData): ISquareDensityData {

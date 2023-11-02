@@ -20,8 +20,8 @@ export const MIN_ZOOM: number = 1/3 * RESOLUTION_SCALE;
 
 export const GRID = 40;
 export const HALF_GRID = GRID / 2;
-export const WORLD_X = 65 * 2;
-export const WORLD_Y = 65 * 2;
+export const WORLD_X = 129;
+export const WORLD_Y = 129;
 export const WORLD_DATA: Cell[][] = []; // TODO maybe temporary until deciding weather to merge with graph (use vertices as cells)
 
 export const TICK_RATE = 50; // ms

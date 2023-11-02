@@ -8,7 +8,7 @@ export interface ICreeperFlowConfig {
   numSquaresY: number;
 
   tileDensityMax: number;
-  tileDensityThreshold: number;
+  tileDensityThreshold: number[];
 }
 
 export interface IRenderQueueItem {
@@ -16,7 +16,14 @@ export interface IRenderQueueItem {
   y: number;
   numSquaresX: number;
   numSquaresY: number;
-  materialIndex: number;
+  threshold: number[];
+}
+
+export interface Emitter {
+  id: string;
+  xCoord: number;
+  yCoord: number;
+  intensity: number;
 }
 
 const defaultConfig: ICreeperFlowConfig = {
@@ -24,7 +31,7 @@ const defaultConfig: ICreeperFlowConfig = {
   numSquaresX: 32,
   numSquaresY: 32,
   tileDensityMax: 128,
-  tileDensityThreshold: 64,
+  tileDensityThreshold: [32, 64, 128],
 };
 
 export class CreeperFlow {
@@ -32,8 +39,8 @@ export class CreeperFlow {
   private scene: Ph.Scene;
   private config: ICreeperFlowConfig;
 
-  density: number[][];
   prevDensity: number[][];
+  density: number[][];
   emitters: Emitter[];
 
   // private terrain: number[][] = [];
@@ -44,13 +51,13 @@ export class CreeperFlow {
   constructor(scene: Ph.Scene, config: ICreeperFlowConfig = defaultConfig) {
     this.scene = scene;
     this.config = config;
-    this.density = this.generateVertices();
     this.prevDensity = this.generateVertices();
+    this.density = this.generateVertices();
     this.emitters = [];
 
     this.marchingSquares = new MarchingSquaresLookup({
       squareSize: config.squareSize,
-      densityThreshold: config.tileDensityThreshold,
+      // densityThreshold: config.tileDensityThreshold,
       densityMax: config.tileDensityMax,
     });
 
@@ -61,6 +68,7 @@ export class CreeperFlow {
   addEmitter(xCoord: number, yCoord: number, intensity: number) {
     const emitter = { xCoord, yCoord, intensity, id: Math.random().toString(36).substring(2, 10) };
     this.emitters.push(emitter);
+    this.scene.add.sprite(xCoord * this.config.squareSize, yCoord * this.config.squareSize, 'creeperEmitter').setDepth(100000000);
     return emitter.id;
   }
 
@@ -70,6 +78,15 @@ export class CreeperFlow {
     return index !== -1;
   }
 
+  damage(xCoord: number, yCoord: number, damage: number) {
+    const {numSquaresX, numSquaresY} = this.config;
+    for (let y = Math.max(0, yCoord - 2); y <= Math.min(numSquaresY, yCoord + 2); y++) {
+      for (let x = Math.max(0, xCoord - 2); x <= Math.min(numSquaresX, xCoord + 2); x++) {
+        this.density[y][x] -= Math.max(0, damage);
+      }
+    }
+  }
+
   private generateVertices() {
     const density: number[][] = [];
     console.time('generateVertices');
@@ -77,7 +94,6 @@ export class CreeperFlow {
     for (let y = 0; y <= numSquaresY; y++) {
       const row: number[] = [];
       for (let x = 0; x <= numSquaresX; x++) {
-        // row.push(this.noise(x / 10, y / 10) * 128 + 128);
         row.push(0);
       }
       density.push(row);
@@ -86,76 +102,77 @@ export class CreeperFlow {
     return density;
   }
 
-  public diffuse(): void {
-    console.time('diffuse');
-    const {numSquaresX, numSquaresY, tileDensityMax, tileDensityThreshold} = this.config;
-    for (const emitter of this.emitters) this.density[emitter.yCoord][emitter.xCoord] += emitter.intensity;
+  public diffuse(tickCounter: number): void {
+    // console.time('diffuse');
+    const {numSquaresX, numSquaresY} = this.config;
 
-    // update prevDensity
-    for (let y = 0; y < numSquaresY; y++) {
-      for (let x = 0; x < numSquaresX; x++) {
-        this.prevDensity[y][x] = this.density[y][x];
+    // flip flopping between prev and current matrix falls apart after a while
+    // const even = tickCounter % 2 === 0;
+    // const density = even ? this.density : this.prevDensity;
+    // const prevDensity = even ? this.prevDensity : this.density;
+
+    const density = this.density;
+    const prevDensity = this.prevDensity;
+    for (let y = 0; y <= numSquaresY; y++) {
+      const densityY = density[y];
+      const prevDensityY = prevDensity[y];
+      for (let x = 0; x <= numSquaresX; x++) {
+        prevDensityY[x] = densityY[x];
       }
     }
 
-    // Iterate over the entire density grid
-    for (let y = 0; y < numSquaresY; y++) {
-      // const y = y1 % 2 === 0 ? numSquaresY - y1 : y1; // Alternate vertical scan direction
-      // const rowCreeper = this.density[y];
-      for (let x = 0; x < numSquaresX; x++) {
-        // const x = y % 2 !== 0 ? numSquaresX - x1 : x1; // Alternate horizontal scan direction
-        const remainingDensity = this.prevDensity[y][x];
-        // this.prevDensity[y][x] -= remainingDensity <= tileDensityThreshold ? 0.1 : 0.05;
-        this.density[y][x] *= this.prevDensity[y][x] <= tileDensityThreshold ? 0.9 : 1;
-        if (remainingDensity < tileDensityThreshold) continue;
+    for (const emitter of this.emitters) {
+      // const intensity = emitter.intensity / 4;
+      // density[emitter.yCoord+1][emitter.xCoord] += intensity;
+      // density[emitter.yCoord-1][emitter.xCoord] += intensity;
+      // density[emitter.yCoord][emitter.xCoord+1] += intensity;
+      // density[emitter.yCoord][emitter.xCoord-1] += intensity;
+      density[emitter.yCoord][emitter.xCoord] += emitter.intensity;
+    }
 
-        try {
-          const densityDown = y < numSquaresY - 1 ? this.prevDensity[y + 1][x] : tileDensityMax;
-          const densityLeft = x > 0 ? this.prevDensity[y][x - 1] : tileDensityMax;
-          const densityUp = y > 0 ? this.prevDensity[y - 1][x] : tileDensityMax;
-          const densityRight = x < numSquaresX - 1 ? this.prevDensity[y][x + 1] : tileDensityMax;
+    for (let y = 0; y <= numSquaresY; y++) {
+      const prevDensityY = prevDensity[y];
+      const densityY = density[y];
+      for (let x = 0; x <= numSquaresX; x++) {
+        density[y][x] -= 0.01;
+        if (x > 0) {
+          const diff = (prevDensityY[x] - densityY[x-1]) * 0.1;
+          if (diff) {
+            densityY[x] -= diff;
+            densityY[x-1] += diff;
+          }
+        }
 
-          // This gives kind of an interesting effect that looks a bit alien and aggressive
-          // if (densityDown < tileDensityThreshold + -20 && densityLeft < tileDensityThreshold + -1 && densityUp < tileDensityThreshold + -1 && densityRight < tileDensityThreshold + -1 && remainingDensity < tileDensityThreshold + -1) continue;
+        if (y > 0) {
+          const diff = (prevDensityY[x] - density[y-1][x]) * 0.1;
+          if (diff) {
+            densityY[x] -= diff;
+            density[y-1][x] += diff;
+          }
+        }
 
-          const canFlowDown = densityDown < remainingDensity;
-          const canFlowLeft = densityLeft < remainingDensity;
-          const canFlowUp = densityUp < remainingDensity;
-          const canFlowRight = densityRight < remainingDensity;
+        if (x < numSquaresX) {
+          const diff = (prevDensityY[x] - densityY[x+1]) * 0.1;
+          if (diff) {
+            densityY[x] -= diff;
+            densityY[x+1] += diff;
+          }
+        }
 
-          const totalFlowDirections = (canFlowDown ? 1 : 0) + (canFlowLeft ? 1 : 0) + (canFlowUp ? 1 : 0) + (canFlowRight ? 1 : 0);
-
-          let totalDiff = 0;
-          if (canFlowDown) totalDiff += (remainingDensity - densityDown);
-          if (canFlowLeft) totalDiff += (remainingDensity - densityLeft);
-          if (canFlowUp) totalDiff += (remainingDensity - densityUp);
-          if (canFlowRight) totalDiff += (remainingDensity - densityRight);
-
-          if (totalFlowDirections === 0) continue;
-          if (totalDiff === 0) continue;
-
-          const weightDown = canFlowDown ? (remainingDensity - densityDown) / totalDiff : 0;
-          const weightLeft = canFlowLeft ? (remainingDensity - densityLeft) / totalDiff : 0;
-          const weightUp = canFlowUp ? (remainingDensity - densityUp) / totalDiff : 0;
-          const weightRight = canFlowRight ? (remainingDensity - densityRight) / totalDiff : 0;
-
-          const halfRemainingDensity = (remainingDensity / 2) * 0.1;
-
-          if (weightDown) this.density[y + 1][x] += halfRemainingDensity * weightDown;
-          if (weightLeft) this.density[y][x - 1] += halfRemainingDensity * weightLeft;
-          if (weightUp) this.density[y - 1][x] += halfRemainingDensity * weightUp;
-          if (weightRight) this.density[y][x + 1] += halfRemainingDensity * weightRight;
-
-          this.density[y][x] -= halfRemainingDensity;
-
-        } catch (e) {
-          continue;
+        if (y < numSquaresY) {
+          const diff = (prevDensityY[x] - density[y+1][x]) * 0.1;
+          if (diff) {
+            densityY[x] -= diff;
+            density[y+1][x] += diff;
+          }
         }
       }
     }
 
-    this.renderQueue.push({x: 0, y: 0, numSquaresX: this.config.numSquaresX, numSquaresY: this.config.numSquaresY, materialIndex: 0});
-    console.timeEnd('diffuse');
+    // this.renderQueue.push({x: 0, y: 0, numSquaresX: this.config.numSquaresX, numSquaresY: this.config.numSquaresY - 1, threshold: 128});
+    // this.renderQueue.push({x: 0, y: 0, numSquaresX: this.config.numSquaresX, numSquaresY: this.config.numSquaresY - 1, threshold: 64});
+    this.renderQueue.push({x: 0, y: 0, numSquaresX: this.config.numSquaresX, numSquaresY: this.config.numSquaresY - 1, threshold: [16, 64, 192]});
+    // this.renderQueue.push({x: 0, y: 0, numSquaresX: 20, numSquaresY: 20, threshold: 3});
   }
 
   update() {
@@ -163,68 +180,54 @@ export class CreeperFlow {
     const graphics = this.terrainGraphics;
     // console.time('updateTerrain');
     graphics.clear();
-    this.renderQueue.forEach((bounds) => {
+    for (const bounds of this.renderQueue) {
       graphics.translateCanvas(0, 0);
-      for (let y = bounds.y; y < (bounds.y + bounds.numSquaresY); y++) {
-        for (let x = bounds.x; x < bounds.x + bounds.numSquaresX; x++) {
-          if (!this.isWithinBounds(x, y)) continue;
-          this.renderSquareAt(x, y, graphics);
+      for (let y = bounds.y; y <= (bounds.y + bounds.numSquaresY); y++) {
+        for (let x = bounds.x; x <= bounds.x + bounds.numSquaresX; x++) {
+          for (const threshold of bounds.threshold) this.renderSquareAt(x, y, threshold, graphics);
+          // graphics.clear();
         }
       }
-    });
+    }
 
     this.renderQueue.length = 0;
-    // console.timeEnd('updateTerrain');
-    // console.log('-------cache size after update', this.marchingSquares.polygonCache.size);
   }
 
-  private renderSquareAt(x: number, y: number, graphics: Ph.GameObjects.Graphics, override?: ISquareDensityData): void {
-    const densityData = override || this.getTileEdges(x, y);
+  private renderSquareAt(x: number, y: number, threshold: number, graphics: Ph.GameObjects.Graphics): void {
+    const densityData = this.getTileEdges(x, y, threshold);
     if (!densityData) return;
     const posX = x * this.config.squareSize;
     const posY = y * this.config.squareSize;
     const {polygons, isoLines, shapeIndex} = this.marchingSquares.getSquareGeomData(densityData);
+    if (shapeIndex === 0) return;
+    // if (shapeIndex === 15) return;
 
     graphics.fillStyle(0x4081b7);
     graphics.lineStyle(2, 0x000000, 1);
     graphics.translateCanvas(posX, posY);
-    // graphics.scaleCanvas(1.05, 1.05);
-    for (const points of polygons) {
-      // graphics.generateTexture('terrainCache', this.config.squareSize, this.config.squareSize); // TODO can maybe improve performance together with next line
-      // graphics.fillPath('terrainCache) // TODO this could work just like Path2D. Try it out. also try to bake textures from graphics obj and cache only those
-      graphics.fillPoints(points, true);
-    }
-
-    graphics.lineStyle(3, 0x000000, 1);
+    for (const points of polygons) graphics.fillPoints(points, true);
+    graphics.lineStyle(3, 0x01030c, 1);
     for (const l of isoLines) graphics.lineBetween(l.x1, l.y1, l.x2, l.y2);
     graphics.translateCanvas(-posX, -posY);
   }
 
-  private getTileEdges(x: number, y: number): ISquareDensityData {
+  private getTileEdges(x: number, y: number, threshold: number): ISquareDensityData {
     return {
       tl: this.roundToNearestEight(this.density[y][x]),
       tr: this.roundToNearestEight(this.density[y][x + 1]),
       br: this.roundToNearestEight(this.density[y + 1][x + 1]),
       bl: this.roundToNearestEight(this.density[y + 1][x]),
-      threshold: this.config.tileDensityThreshold,
+      threshold: threshold,
       maxDensity: this.config.tileDensityMax,
     };
   }
 
-  private roundToNearestEight(val: number, num = 4): number {
-    return Math.round(val / num) * num;
+  private roundToNearestEight(val: number, num = 1): number {
+    // return Math.round(val / num) * num;
+    return val;
   }
 
   private isWithinBounds(x: number, y: number): boolean {
-    return x >= 0 && y >= 0 && x < this.config.numSquaresX && y < this.config.numSquaresY;
+    return x >= 0 && y >= 0 && x <= this.config.numSquaresX && y <= this.config.numSquaresY;
   }
-}
-
-/////////////////////////////////////////////////
-
-export interface Emitter {
-  id: string;
-  xCoord: number;
-  yCoord: number;
-  intensity: number;
 }
