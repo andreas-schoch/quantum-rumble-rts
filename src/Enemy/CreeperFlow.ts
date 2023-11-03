@@ -74,15 +74,16 @@ export class CreeperFlow {
       return n;
     });
 
+    // TODO find more optimal way to display terrain. Static render textures have HORRIBLE performance when creeper graphics is underflowing it.
     const {numSquaresX, numSquaresY} = this.config;
     // BOTTOM LAYER
     const graphics = this.scene.add.graphics().setDepth(1).setName('terrain').setAlpha(1);
-    graphics.fillStyle(0x544741, 1);
+    const BASE_TERRAIN_COLOR = 0x544741;
+    graphics.fillStyle(BASE_TERRAIN_COLOR, 1);
     graphics.fillRect(0, 0, numSquaresX * GRID, numSquaresY * GRID);
-
     // ELEVATION LAYERS
-    for (const [threshold, color] of [[10, 0x544741 + 0x050505], [125, 0x544741 + 0x111111]]) {
-      const graphics = this.scene.add.graphics().setDepth(1).setName('terrain').setAlpha(1);
+    for (const [threshold, color, depth] of [[10, BASE_TERRAIN_COLOR + 0x050505, 64], [125, BASE_TERRAIN_COLOR + 0x111111, 128]]) {
+      const graphics = this.scene.add.graphics().setDepth(depth).setName('terrain').setAlpha(1);
       graphics.lineStyle(2, 0x000000);
       for (let y = 0; y < numSquaresY; y++) {
         for (let x = 0; x < numSquaresX; x++) {
@@ -93,15 +94,9 @@ export class CreeperFlow {
           this.renderSquareAt(x, y, threshold, graphics, this.terrain, 0, 0);
         }
       }
-      graphics.setScale(4, 4); // otherwise it looks too low-rez once transformed to texture and zoomed in
-      const render = this.scene.add.renderTexture(0, 0, config.numSquaresX * GRID * 4, config.numSquaresY * GRID * 4).setDepth(1).setName('terrain').setOrigin(0, 0);
-      render.draw(graphics);
-      render.setScale(0.25, 0.25);
-      graphics.clear();
-      graphics.destroy();
     }
 
-    config.tileDensityThreshold.forEach(threshold => this.terrainGraphics.set(threshold, this.scene.add.graphics().setAlpha(1).setDepth(100000).setName('g' + threshold)));
+    config.tileDensityThreshold.forEach(threshold => this.terrainGraphics.set(threshold, this.scene.add.graphics().setAlpha(1).setDepth(threshold).setName('g' + threshold)));
     config.tileDensityThreshold.forEach(threshold => this.currentShapesByThreshold.set(threshold, this.generateMatrix()));
   }
 
@@ -242,7 +237,7 @@ export class CreeperFlow {
     });
   }
 
-  update() {
+  tick() {
     if (!this.renderQueue.length) return;
     this.terrainGraphics.forEach((graphics) => graphics.clear());
     for (const bounds of this.renderQueue) {

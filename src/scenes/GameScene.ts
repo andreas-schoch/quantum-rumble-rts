@@ -44,7 +44,7 @@ export default class GameScene extends Phaser.Scene {
     this.sfx_start_collect = this.sound.add('start_collect', {detune: 600, rate: 1.25, volume: 0.5 , loop: false});
     this.sfx_place_structure = this.sound.add('place_structure', {detune: 200, rate: 1.25, volume: 1 , loop: false});
 
-    this.add.tileSprite(0, 0, GRID * WORLD_X,GRID * WORLD_Y, 'cell_white').setOrigin(0, 0);
+    // this.add.tileSprite(0, 0, GRID * WORLD_X,GRID * WORLD_Y, 'cell_white').setOrigin(0, 0);
     this.setupCameraAndInput();
     this.observer.removeAllListeners();
     this.network = new Network(this);
@@ -67,7 +67,7 @@ export default class GameScene extends Phaser.Scene {
         this.tickCounter++;
         console.time('tick');
         this.creeperFlow.diffuse(this.tickCounter);
-        this.creeperFlow.update();
+        this.creeperFlow.tick();
         console.timeEnd('tick');
         this.network.tick(this.tickCounter);
         this.city.tick(this.tickCounter);
