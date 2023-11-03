@@ -26,8 +26,6 @@ export default class GameScene extends Phaser.Scene {
   sfx_place_structure: Phaser.Sound.BaseSound;
   tickCounter: number;
   creeperFlow: CreeperFlow;
-  // creeperFlow2: CreeperFlow;
-  // creeperFlow3: CreeperFlow;
 
   constructor() {
     super({key: SceneKeys.GAME_SCENE});
@@ -41,9 +39,8 @@ export default class GameScene extends Phaser.Scene {
   }
 
   private create() {
-    // this.creeperFlow = new CreeperFlow(this, {squareSize: GRID, numSquaresX: WORLD_X - 1, numSquaresY: WORLD_Y, tileDensityMax: 32 * 10, tileDensityThreshold: 16 * 4});
-    // this.creeperFlow2 = new CreeperFlow(this, {squareSize: GRID, numSquaresX: WORLD_X - 1, numSquaresY: WORLD_Y, tileDensityMax: 32 * 10, tileDensityThreshold: 16 * 2});
-    this.creeperFlow = new CreeperFlow(this, {squareSize: GRID, numSquaresX: WORLD_X - 1, numSquaresY: WORLD_Y, tileDensityMax: 32 * 9, tileDensityThreshold: [32]});
+    // TODO render thresholds as needed depending on max density + elevation (once there is a non-flat terrain)
+    this.creeperFlow = new CreeperFlow(this, {squareSize: GRID, numSquaresX: WORLD_X - 1, numSquaresY: WORLD_Y, tileDensityMax: 512, tileDensityThreshold: [16, 32, 48, 64, 80, 96, 112, 128, 144, 160, 176, 192]});
     this.sfx_start_collect = this.sound.add('start_collect', {detune: 600, rate: 1.25, volume: 0.5 , loop: false});
     this.sfx_place_structure = this.sound.add('place_structure', {detune: 200, rate: 1.25, volume: 1 , loop: false});
 
@@ -56,8 +53,10 @@ export default class GameScene extends Phaser.Scene {
     this.network.placeStructure(this.city.coordX, this.city.coordY, this.city);
     this.network.startCollecting(this.city);
 
-    this.creeperFlow.addEmitter(5, 25, 512);
-    this.creeperFlow.addEmitter(10, 70, 128);
+    this.creeperFlow.addEmitter(2, 2, 2000);
+    this.creeperFlow.addEmitter(60, 2, 2000);
+    this.creeperFlow.addEmitter(34, 34, 2000);
+    this.creeperFlow.addEmitter(10, 62, 2560);
 
     this.tickCounter = 0;
     // Only rendering related things should happen every frame. I potentially want to be able to simulate this game on a server, so it needs to be somewhat deterministic
@@ -87,7 +86,8 @@ export default class GameScene extends Phaser.Scene {
     // CAMERA STUFF
     const camera = this.cameras.main;
     const resolutionMod = this.cameras.main.width / DEFAULT_WIDTH;
-    camera.setZoom(DEFAULT_ZOOM * resolutionMod);    camera.setBackgroundColor(0x333333);
+    camera.setZoom(DEFAULT_ZOOM * resolutionMod);
+    camera.setBackgroundColor(0x333333);
     camera.centerOnX(GRID * WORLD_X / 2);
     camera.centerOnY(GRID * WORLD_Y / 2);
 

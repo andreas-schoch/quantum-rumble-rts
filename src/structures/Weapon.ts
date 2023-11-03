@@ -38,9 +38,7 @@ export class Weapon extends BaseStructure {
 
   tick(tickCounter: number) {
     if (!super.tick(tickCounter)) return;
-    console.log('tick', this.ammoCurrent, this.pendingAmmo.length);
     if (this.built && this.ammoCurrent < this.ammoMax && this.pendingAmmo.length < this.ammoMax - this.ammoCurrent) {
-      console.log('tick reload');
       this.pendingAmmo.push(this.scene.network.requestEnergy('ammo', 1, this));
     }
     this.attack(tickCounter);
