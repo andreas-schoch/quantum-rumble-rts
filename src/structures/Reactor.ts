@@ -26,8 +26,8 @@ export class Reactor extends BaseStructure {
 
   static generateTextures(scene: Phaser.Scene) {
     const graphics = scene.add.graphics();
-    graphics.fillStyle(0x00ffff, 1);
-    graphics.lineStyle(2, 0x777777, 1);
+    graphics.fillStyle(0x2e5982, 1);
+    graphics.lineStyle(2, 0x000000, 1);
     this.drawStar(graphics, HALF_GRID, HALF_GRID, 4, HALF_GRID - 2, HALF_GRID * 0.4);
     graphics.generateTexture('reactor', GRID, GRID);
     graphics.destroy();

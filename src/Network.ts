@@ -123,7 +123,8 @@ export class Network {
         const arr = this.collectionMap.get(key) || [[], undefined];
         arr[0].push(structure);
         if (arr[0].length === 1) {
-          arr[1] = this.scene.add.sprite(x * GRID, y * GRID, 'cell_green').setDepth(0).setOrigin(0, 0);
+          // TODO use marching squares to draw the collecting area. Draw each elevation separately
+          arr[1] = this.scene.add.sprite(x * GRID, y * GRID, 'cell_green').setDepth(-11).setOrigin(0, 0).setAlpha(0.2);
           this.collectionSpriteSet.add(arr[1]);
         }
         this.collectionMap.set(key, arr);
@@ -223,7 +224,7 @@ export class Network {
     const key = `line-${Math.round(euclideanDistance)}`;
     if (!this.textureKeysEdge.has(key)) {
       const graphics = this.scene.add.graphics();
-      graphics.fillStyle(0xbbbbbb, 1);
+      graphics.fillStyle(0x000000, 1);
       graphics.fillRect(0, 0, euclideanDistance, 6);
       graphics.fillStyle(0xffffff, 1);
       graphics.fillRect(0, 0 + 2, euclideanDistance, 2);

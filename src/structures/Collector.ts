@@ -7,7 +7,7 @@ export class Collector extends BaseStructure {
   isRelay = true;
   movable = false;
   connectionRange = 5;
-  energyCollectionRange = 4;
+  energyCollectionRange = 3;
   energyCollectionRate = 0.05;
   energyProduction = 0;
 
@@ -30,7 +30,7 @@ export class Collector extends BaseStructure {
     const outer = GRID * 0.30;
     const inner = outer / 2;
     graphics.fillStyle(0xd3d3d3, 1);
-    graphics.lineStyle(2, 0x777777, 1);
+    graphics.lineStyle(2, 0x000000, 1);
     graphics.fillCircle(HALF_GRID, HALF_GRID, outer);
     graphics.strokeCircle(HALF_GRID, HALF_GRID, outer);
     graphics.fillStyle(0xffffff, 1);

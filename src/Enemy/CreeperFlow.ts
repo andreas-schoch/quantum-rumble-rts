@@ -35,6 +35,8 @@ const defaultConfig: ICreeperFlowConfig = {
   tileDensityThreshold: [32, 64, 128],
 };
 
+// TODO separate rendering out, so it can be used for creeper and terrain. This should only contain the densities and call the generic render methods
+//  Rendering of creeper and terrain may be moved to a shader. It is too slow now to play on a large map zoomed out
 export class CreeperFlow {
   renderQueue: IRenderQueueItem[] = [];
   private scene: Ph.Scene;
@@ -42,7 +44,8 @@ export class CreeperFlow {
 
   prevDensity: number[][];
   density: number[][];
-  emitters: Emitter[];
+  terrain: number[][];
+  emitters: Emitter[] = [];
 
   private readonly terrainGraphics: Map<number, Ph.GameObjects.Graphics> = new Map();
   private readonly marchingSquares: MarchingSquaresLookup;
@@ -54,16 +57,51 @@ export class CreeperFlow {
   constructor(scene: Ph.Scene, config: ICreeperFlowConfig = defaultConfig) {
     this.scene = scene;
     this.config = config;
-    this.prevDensity = this.generateMatrix();
-    this.density = this.generateMatrix();
-    this.emitters = [];
 
     this.marchingSquares = new MarchingSquaresLookup({
       squareSize: config.squareSize,
       densityMax: config.tileDensityMax,
     });
 
-    config.tileDensityThreshold.forEach(threshold => this.terrainGraphics.set(threshold, this.scene.add.graphics().setAlpha(0.3).setDepth(100000).setName('g' + threshold)));
+    this.prevDensity = this.generateMatrix();
+    this.density = this.generateMatrix();
+    this.terrain = this.generateMatrix((x, y) => {
+      const n1 = (this.noise(x / 8, y / 8) * this.config.tileDensityMax) * 0.3;
+      const n2 = (this.noise(x / 16, y / 16) * this.config.tileDensityMax) * 0.5;
+      const n3 = (this.noise(x / 36, y / 36) * this.config.tileDensityMax) * 1.25;
+      const n = (n1 + n2 + n3) / 3;
+      // return Math.round(Math.max(n, 0) / 4) * 4;
+      return n;
+    });
+
+    const {numSquaresX, numSquaresY} = this.config;
+    // BOTTOM LAYER
+    const graphics = this.scene.add.graphics().setDepth(1).setName('terrain').setAlpha(1);
+    graphics.fillStyle(0x544741, 1);
+    graphics.fillRect(0, 0, numSquaresX * GRID, numSquaresY * GRID);
+
+    // ELEVATION LAYERS
+    for (const [threshold, color] of [[10, 0x544741 + 0x050505], [125, 0x544741 + 0x111111]]) {
+      const graphics = this.scene.add.graphics().setDepth(1).setName('terrain').setAlpha(1);
+      graphics.lineStyle(2, 0x000000);
+      for (let y = 0; y < numSquaresY; y++) {
+        for (let x = 0; x < numSquaresX; x++) {
+          graphics.fillStyle(0x9b938d - 0x111111, 1);
+          this.renderSquareAt(x, y, threshold - 8, graphics, this.terrain, 10, 20);
+          this.renderSquareAt(x, y, threshold - 4, graphics, this.terrain, 5, 10);
+          graphics.fillStyle(color, 1);
+          this.renderSquareAt(x, y, threshold, graphics, this.terrain, 0, 0);
+        }
+      }
+      graphics.setScale(4, 4); // otherwise it looks too low-rez once transformed to texture and zoomed in
+      const render = this.scene.add.renderTexture(0, 0, config.numSquaresX * GRID * 4, config.numSquaresY * GRID * 4).setDepth(1).setName('terrain').setOrigin(0, 0);
+      render.draw(graphics);
+      render.setScale(0.25, 0.25);
+      graphics.clear();
+      graphics.destroy();
+    }
+
+    config.tileDensityThreshold.forEach(threshold => this.terrainGraphics.set(threshold, this.scene.add.graphics().setAlpha(1).setDepth(100000).setName('g' + threshold)));
     config.tileDensityThreshold.forEach(threshold => this.currentShapesByThreshold.set(threshold, this.generateMatrix()));
   }
 
@@ -89,14 +127,14 @@ export class CreeperFlow {
     }
   }
 
-  private generateMatrix() {
+  private generateMatrix(fn: (x: number, y: number ) => number = () => 0): number[][] {
     const density: number[][] = [];
     console.time('generateVertices');
     const {numSquaresX, numSquaresY} = this.config;
     for (let y = 0; y <= numSquaresY; y++) {
       const row: number[] = [];
       for (let x = 0; x <= numSquaresX; x++) {
-        row.push(0);
+        row.push(fn.call(this, x, y));
       }
       density.push(row);
     }
@@ -211,6 +249,8 @@ export class CreeperFlow {
       for (const threshold of bounds.threshold) {
         const g = this.terrainGraphics.get(threshold);
         if (!g) throw new Error('no graphics');
+        g.fillStyle(0x4081b7, 0.4);
+        g.lineStyle(2, 0x01030c, 1);
         for (let y = bounds.y; y <= (bounds.y + bounds.numSquaresY); y++) {
           for (let x = bounds.x; x <= bounds.x + bounds.numSquaresX; x++) {
             if (!this.isWithinBounds(x, y)) continue; // this can be removed if we ensure the renderQueue is always within bounds
@@ -223,36 +263,31 @@ export class CreeperFlow {
     this.renderQueue.length = 0;
   }
 
-  private renderSquareAt(x: number, y: number, threshold: number, graphics: Phaser.GameObjects.Graphics): void {
-    const densityData = this.getTileEdges(x, y, threshold);
+  private renderSquareAt(x: number, y: number, threshold: number, graphics: Phaser.GameObjects.Graphics, matrix: number[][] = this.density, offsetX = 0, offsetY = 0): void {
+    const densityData = this.getTileEdges(x, y, threshold, matrix);
     if (!densityData) return;
     const posX = x * GRID;
     const posY = y * GRID;
-    const {polygons, isoLines, shapeIndex, hash} = this.marchingSquares.getSquareGeomData(densityData);
+    const {polygons, isoLines, shapeIndex} = this.marchingSquares.getSquareGeomData(densityData);
 
-    if (shapeIndex === 0) return;
+    if (shapeIndex === 0) return; // not drawing empty square
+
+    graphics.translateCanvas(posX + offsetX, posY + offsetY);
     if (shapeIndex === 15) {
-      graphics.fillStyle(0x4081b7);
-      graphics.translateCanvas(posX, posY);
       graphics.fillRect(0, 0, GRID, GRID);
-      graphics.translateCanvas(-posX, -posY);
-      return;
+    } else {
+      for (const points of polygons) graphics.fillPoints(points, true);
+      for (const l of isoLines) graphics.lineBetween(l.x1, l.y1, l.x2, l.y2);
     }
-
-    graphics.translateCanvas(posX, posY);
-    graphics.fillStyle(0x4081b7);
-    graphics.lineStyle(3, 0x01030c);
-    for (const points of polygons) graphics.fillPoints(points, true);
-    for (const l of isoLines) graphics.lineBetween(l.x1, l.y1, l.x2, l.y2);
-    graphics.translateCanvas(-posX, -posY);
+    graphics.translateCanvas(-(posX + offsetX), -(posY + offsetY));
   }
 
-  private getTileEdges(x: number, y: number, threshold: number): ISquareDensityData {
+  private getTileEdges(x: number, y: number, threshold: number, matrix: number[][] = this.density): ISquareDensityData {
     return {
-      tl: this.density[y][x],
-      tr: this.density[y][x + 1],
-      br: this.density[y + 1][x + 1],
-      bl: this.density[y + 1][x],
+      tl: matrix[y][x],
+      tr: matrix[y][x + 1],
+      br: matrix[y + 1][x + 1],
+      bl: matrix[y + 1][x],
       threshold: threshold,
       maxDensity: this.config.tileDensityMax,
     };

@@ -53,10 +53,10 @@ export default class GameScene extends Phaser.Scene {
     this.network.placeStructure(this.city.coordX, this.city.coordY, this.city);
     this.network.startCollecting(this.city);
 
-    this.creeperFlow.addEmitter(2, 2, 2000);
-    this.creeperFlow.addEmitter(60, 2, 2000);
-    this.creeperFlow.addEmitter(34, 34, 2000);
-    this.creeperFlow.addEmitter(10, 62, 2560);
+    this.creeperFlow.addEmitter(2, 2, 1024);
+    this.creeperFlow.addEmitter(WORLD_X - 2, 2, 1024);
+    this.creeperFlow.addEmitter(2, WORLD_Y - 2, 1024);
+    this.creeperFlow.addEmitter(WORLD_X - 2, WORLD_Y - 2, 1024);
 
     this.tickCounter = 0;
     // Only rendering related things should happen every frame. I potentially want to be able to simulate this game on a server, so it needs to be somewhat deterministic
@@ -64,8 +64,8 @@ export default class GameScene extends Phaser.Scene {
       delay: TICK_RATE,
       timeScale: 1,
       callback: () => {
-        console.time('tick');
         this.tickCounter++;
+        console.time('tick');
         this.creeperFlow.diffuse(this.tickCounter);
         this.creeperFlow.update();
         console.timeEnd('tick');

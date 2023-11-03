@@ -59,12 +59,12 @@ export class City extends BaseStructure {
   static generateTextures(scene: Phaser.Scene): void {
     const graphics = scene.add.graphics();
     // outer
-    graphics.fillStyle(0xd3d3d3, 1);
+    graphics.fillStyle(0xa88924, 1);
     graphics.lineStyle(2, 0x000000 , 1);
     graphics.fillRoundedRect(0, 0, GRID * 3, GRID * 3, GRID * 0.4);
     graphics.strokeRoundedRect(1, 1, GRID * 3 - 2, GRID * 3 - 2, GRID * 0.4);
     // inner
-    graphics.fillStyle(0xffffff, 1);
+    graphics.fillStyle(0xbdbdbd, 1);
     graphics.fillRoundedRect(GRID * 0.25, GRID * 0.25, GRID * 2.5, GRID * 2.5, GRID * 0.25);
     graphics.strokeRoundedRect(GRID * 0.25, GRID * 0.25, GRID * 2.5, GRID * 2.5, GRID * 0.25);
     graphics.generateTexture('city', GRID * 3, GRID * 3);

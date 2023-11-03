@@ -48,20 +48,24 @@ export default class PreloadScene extends Phaser.Scene {
     graphics.clear();
 
     // Energy Ball gray
-    const radius = 8;
-    const strokeWidth = 1.5;
-    graphics.lineStyle(strokeWidth, 0x000000, 1);
-    graphics.fillStyle(0xd3d3d3, 1);
+    const radius = 16;
+    const strokeWidth = 3;
+    graphics.fillStyle(0x000000, 1);
     graphics.fillCircle(radius, radius, radius);
-    graphics.strokeCircle(radius, radius, radius - (strokeWidth / 2));
-    graphics.generateTexture('energy', radius * 2, radius * 2);
+    graphics.fillStyle(0xd3d3d3, 1);
+    graphics.fillCircle(radius, radius, radius - strokeWidth);
+    graphics.setScale(0.5);
+    graphics.generateTexture('energy', radius, radius);
     graphics.clear();
 
     // Energy Ball red
-    graphics.fillStyle(0xff0000, 1);
+    graphics.setScale(1);
+    graphics.fillStyle(0x000000, 1);
     graphics.fillCircle(radius, radius, radius);
-    graphics.strokeCircle(radius, radius, radius - (strokeWidth / 2));
-    graphics.generateTexture('energy_red', radius * 2, radius * 2);
+    graphics.fillStyle(0xff0000, 1);
+    graphics.fillCircle(radius, radius, radius - strokeWidth);
+    graphics.setScale(0.5);
+    graphics.generateTexture('energy_red', radius, radius);
     graphics.destroy();
   }
 }

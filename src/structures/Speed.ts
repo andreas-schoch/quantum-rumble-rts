@@ -28,7 +28,7 @@ export class Speed extends BaseStructure {
   static generateTextures(scene: Phaser.Scene) {
     const graphics = scene.add.graphics();
     graphics.fillStyle(0xff0000, 1);
-    graphics.lineStyle(2, 0x777777, 1);
+    graphics.lineStyle(2, 0x000000, 1);
     this.drawStar(graphics, HALF_GRID, HALF_GRID, 2, HALF_GRID - 4, HALF_GRID - 4);
     graphics.generateTexture('speed', GRID, GRID);
     graphics.destroy();

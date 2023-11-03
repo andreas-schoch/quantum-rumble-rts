@@ -26,7 +26,7 @@ export class Relay extends BaseStructure {
   static generateTextures(scene: Phaser.Scene) {
     const graphics = scene.add.graphics();
     graphics.fillStyle(0xd3d3d3, 1);
-    graphics.lineStyle(2, 0x777777, 1);
+    graphics.lineStyle(2, 0x000000, 1);
     BaseStructure.drawStar(graphics, HALF_GRID, HALF_GRID * 1.15, 3, GRID * 0.4, GRID * 0.2);
     graphics.fillStyle(0xffffff, 1);
     BaseStructure.drawStar(graphics, HALF_GRID, HALF_GRID * 1.15, 3, GRID * 0.2, GRID * 0.1);
