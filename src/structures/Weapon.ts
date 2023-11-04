@@ -118,6 +118,6 @@ export class Weapon extends BaseStructure {
     this.graphics.fillStyle(0xffffff, 2);
     this.graphics.fillCircle(0, 0, GRID * 0.2);
     this.graphics.strokeCircle(0, 0, GRID * 0.2);
-    this.graphics.setDepth(12);
+    this.graphics.setDepth(500);
   }
 }

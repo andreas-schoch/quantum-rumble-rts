@@ -12,6 +12,19 @@ export interface ICreeperFlowConfig {
   tileDensityThreshold: number[];
 }
 
+export interface TerrainConfig {
+  wallColor: number;
+  tileDensityMax: number;
+  creeperLayers: number;
+  layers: TerrainLayer[];
+}
+
+export interface TerrainLayer {
+  threshold: number;
+  depth: number;
+  color: number;
+}
+
 export interface IRenderQueueItem {
   x: number;
   y: number;
@@ -24,7 +37,7 @@ export interface Emitter {
   id: string;
   xCoord: number;
   yCoord: number;
-  intensity: number;
+  creeperPerSecond: number;
 }
 
 const defaultConfig: ICreeperFlowConfig = {
@@ -33,6 +46,20 @@ const defaultConfig: ICreeperFlowConfig = {
   numSquaresY: 32,
   tileDensityMax: 128,
   tileDensityThreshold: [32, 64, 128],
+};
+
+const defaultTerrainConfig: TerrainConfig = {
+  wallColor: 0x9b938d - 0x111111,
+  tileDensityMax: 256,
+  creeperLayers: 3,
+  layers: [
+    {threshold: 0, depth: 0, color: 0x544741},
+    {threshold: 48, depth: 48, color: 0x544741 + 0x050505},
+    {threshold: 96, depth: 96, color: 0x544741 + 0x111111},
+    {threshold: 144, depth: 144, color: 0x544741 + 0x151515},
+    {threshold: 192, depth: 192, color: 0x544741 + 0x222222},
+    {threshold: 240, depth: 240, color: 0x544741 + 0x252525},
+  ],
 };
 
 // TODO separate rendering out, so it can be used for creeper and terrain. This should only contain the densities and call the generic render methods
@@ -54,6 +81,8 @@ export class CreeperFlow {
   currentShapesByThreshold: Map<number, number[][]> = new Map();
   g: Ph.GameObjects.Graphics;
 
+  flowNeighbours = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+
   constructor(scene: Ph.Scene, config: ICreeperFlowConfig = defaultConfig) {
     this.scene = scene;
     this.config = config;
@@ -68,11 +97,22 @@ export class CreeperFlow {
     this.terrain = this.generateMatrix((x, y) => {
       const n1 = (this.noise(x / 8, y / 8) * this.config.tileDensityMax) * 0.3;
       const n2 = (this.noise(x / 16, y / 16) * this.config.tileDensityMax) * 0.5;
-      const n3 = (this.noise(x / 36, y / 36) * this.config.tileDensityMax) * 1.25;
-      const n = (n1 + n2 + n3) / 3;
-      // return Math.round(Math.max(n, 0) / 4) * 4;
-      return n;
+      const n3 = (this.noise(x / 48, y / 48) * this.config.tileDensityMax) * 1.25;
+      let n = Math.max(((n1 + n2 + n3) / 3) + 32, 0);
+
+      if (n < 48) n = 0;
+      // else if (n < 96 - 16) n = 48;
+      // else if (n < 144 - 16) n = 96;
+      // else if (n < 192 - 16) n = 144;
+      // else if (n < 240 - 16) n = 192;
+      return Math.max(n, 0);
     });
+
+    // for (const [y, terrainY] of this.terrain.entries()) {
+    //   for (const [x, density] of terrainY.entries()) {
+    //     this.scene.add.text(x * GRID, y * GRID, density.toFixed(0), {fontSize: '10px', color: '#ffffff'}).setDepth(100000000);
+    //   }
+    // }
 
     // TODO find more optimal way to display terrain. Static render textures have HORRIBLE performance when creeper graphics is underflowing it.
     const {numSquaresX, numSquaresY} = this.config;
@@ -82,7 +122,7 @@ export class CreeperFlow {
     graphics.fillStyle(BASE_TERRAIN_COLOR, 1);
     graphics.fillRect(0, 0, numSquaresX * GRID, numSquaresY * GRID);
     // ELEVATION LAYERS
-    for (const [threshold, color, depth] of [[10, BASE_TERRAIN_COLOR + 0x050505, 64], [125, BASE_TERRAIN_COLOR + 0x111111, 128]]) {
+    for (const {threshold, color, depth} of defaultTerrainConfig.layers) {
       const graphics = this.scene.add.graphics().setDepth(depth).setName('terrain').setAlpha(1);
       graphics.lineStyle(2, 0x000000);
       for (let y = 0; y < numSquaresY; y++) {
@@ -96,12 +136,12 @@ export class CreeperFlow {
       }
     }
 
-    config.tileDensityThreshold.forEach(threshold => this.terrainGraphics.set(threshold, this.scene.add.graphics().setAlpha(1).setDepth(threshold).setName('g' + threshold)));
+    config.tileDensityThreshold.forEach(threshold => this.terrainGraphics.set(threshold, this.scene.add.graphics().setAlpha(1).setDepth(threshold + 1).setName('g' + threshold)));
     config.tileDensityThreshold.forEach(threshold => this.currentShapesByThreshold.set(threshold, this.generateMatrix()));
   }
 
-  addEmitter(xCoord: number, yCoord: number, intensity: number) {
-    const emitter = { xCoord, yCoord, intensity, id: Math.random().toString(36).substring(2, 10) };
+  addEmitter(xCoord: number, yCoord: number, creeperPerSecond: number) {
+    const emitter = { xCoord, yCoord, creeperPerSecond, id: Math.random().toString(36).substring(2, 10) };
     this.emitters.push(emitter);
     this.scene.add.sprite(xCoord * GRID, yCoord * GRID, 'creeperEmitter').setDepth(100000000);
     return emitter.id;
@@ -147,8 +187,9 @@ export class CreeperFlow {
       const densityY = density[y];
       const prevDensityY = prevDensity[y];
       for (let x = 0; x <= numSquaresX; x++) {
-        totalDensity += densityY[x];
-        prevDensityY[x] = densityY[x];
+        totalDensity += Math.min(densityY[x], 256);
+        // prevDensityY[x] = densityY[x];
+        prevDensityY[x] = Math.max(Math.min(densityY[x], 102400000000000), 0);
       }
     }
 
@@ -157,57 +198,37 @@ export class CreeperFlow {
       this.prevTotal = totalDensity;
     }
 
-    // if (tickCounter % 4 === 0) {
-    for (const emitter of this.emitters) {
-      const intensity = (emitter.intensity * TICK_DELTA);
-      // density[emitter.yCoord+1][emitter.xCoord] += intensity;
-      // density[emitter.yCoord-1][emitter.xCoord] += intensity;
-      // density[emitter.yCoord][emitter.xCoord+1] += intensity;
-      // density[emitter.yCoord][emitter.xCoord-1] += intensity;
-      density[emitter.yCoord][emitter.xCoord] += intensity;
-    }
-    // }
+    // EMIT
+    for (const emitter of this.emitters) density[emitter.yCoord][emitter.xCoord] += (emitter.creeperPerSecond * TICK_DELTA);
 
     for (let y = 0; y <= numSquaresY; y++) {
       const prevDensityY = prevDensity[y];
       const densityY = density[y];
+      const terrainY = this.terrain[y];
       for (let x = 0; x <= numSquaresX; x++) {
-
-        if (densityY[x] <= 8) {
-          densityY[x] = Math.max(densityY[x] - 0.05, 0);
+        // EVAPORATE
+        if (prevDensityY[x] <= 8) {
+          prevDensityY[x] = Math.max(prevDensityY[x] - 0.05, 0);
           continue;
         }
-        // } else densityY[x] *= 0.99995;
-        if (x > 0) {
-          const diff = (prevDensityY[x] - densityY[x-1]) * 0.05;
-          // if (diff) {
-          densityY[x] -= diff;
-          densityY[x-1] += diff;
-          // }
-        }
 
-        if (y > 0) {
-          const diff = (prevDensityY[x] - density[y-1][x]) * 0.05;
-          // if (diff) {
-          densityY[x] -= diff;
-          density[y-1][x] += diff;
-          // }
-        }
+        // if (prevDensityY[x] < 16) continue;
+        const flowRate = 0.15;
 
-        if (x < numSquaresX) {
-          const diff = (prevDensityY[x] - densityY[x+1]) * 0.05;
-          // if (diff) {
-          densityY[x] -= diff;
-          densityY[x+1] += diff;
-          // }
-        }
-
-        if (y < numSquaresY) {
-          const diff = (prevDensityY[x] - density[y+1][x]) * 0.05;
-          // if (diff) {
-          densityY[x] -= diff;
-          density[y+1][x] += diff;
-          // }
+        for (const [dx, dy] of this.flowNeighbours) {
+          const newX = x + dx;
+          const newY = y + dy;
+          const currentTotalElevation = prevDensityY[x] + Math.round(terrainY[x] / 16); // TODO questionable to round to steps of 16
+          if (newX >= 0 && newX <= numSquaresX && newY >= 0 && newY <= numSquaresY) {
+            const neighborTotalElevation = prevDensity[newY][newX] + this.terrain[newY][newX];
+            const elevationDiff = currentTotalElevation - neighborTotalElevation;
+            // If the current tile is higher in total elevation, diffuse down to the neighbor
+            if (elevationDiff > 0) {
+              const flowAmount = Math.min(elevationDiff * flowRate, prevDensity[y][x] * flowRate);
+              densityY[x] -= flowAmount;
+              density[newY][newX] += flowAmount;
+            }
+          }
         }
       }
     }
@@ -259,7 +280,7 @@ export class CreeperFlow {
   }
 
   private renderSquareAt(x: number, y: number, threshold: number, graphics: Phaser.GameObjects.Graphics, matrix: number[][] = this.density, offsetX = 0, offsetY = 0): void {
-    const densityData = this.getTileEdges(x, y, threshold, matrix);
+    const densityData = this.getTileEdges(x, y, threshold, matrix, this.terrain === matrix ? undefined : this.terrain);
     if (!densityData) return;
     const posX = x * GRID;
     const posY = y * GRID;
@@ -277,13 +298,23 @@ export class CreeperFlow {
     graphics.translateCanvas(-(posX + offsetX), -(posY + offsetY));
   }
 
-  private getTileEdges(x: number, y: number, threshold: number, matrix: number[][] = this.density): ISquareDensityData {
+  private getTileEdges(x: number, y: number, threshold: number, matrix: number[][] = this.density, secondary?: number[][]): ISquareDensityData {
+    const creeperTL = matrix[y][x];
+    const creeperTR = matrix[y][x+1];
+    const creeperBR = matrix[y+1][x+1];
+    const creeperBL = matrix[y+1][x];
+
+    const secondaryTL = secondary ? secondary[y][x] : 0;
+    const secondaryTR = secondary ? secondary[y][x+1] : 0;
+    const secondaryBR = secondary ? secondary[y+1][x+1] : 0;
+    const secondaryBL = secondary ? secondary[y+1][x] : 0;
+
     return {
-      tl: matrix[y][x],
-      tr: matrix[y][x + 1],
-      br: matrix[y + 1][x + 1],
-      bl: matrix[y + 1][x],
-      threshold: threshold,
+      tl: creeperTL > 0 ? creeperTL + secondaryTL : creeperTL,
+      tr: creeperTR > 0 ? creeperTR + secondaryTR : creeperTR,
+      br: creeperBR > 0 ? creeperBR + secondaryBR : creeperBR,
+      bl: creeperBL > 0 ? creeperBL + secondaryBL : creeperBL,
+      threshold,
       maxDensity: this.config.tileDensityMax,
     };
   }
@@ -292,3 +323,32 @@ export class CreeperFlow {
     return x >= 0 && y >= 0 && x < this.config.numSquaresX && y < this.config.numSquaresY;
   }
 }
+
+/*
+
+        // FLOW LEFT
+        if (x > 0 && terrainDensityY[x-1] < prevDensityY[x-1]) {
+          const diff = (prevDensityY[x] - densityY[x-1]) * 0.05;
+          densityY[x] -= diff;
+          densityY[x-1] += diff;
+        }
+        // FLOW UP
+        if (y > 0 && this.terrain[y-1][x] < prevDensity[y-1][x]) {
+          const diff = (prevDensityY[x] - density[y-1][x]) * 0.05;
+          densityY[x] -= diff;
+          density[y-1][x] += diff;
+        }
+        // FLOW RIGHT
+        if (x < numSquaresX && terrainDensityY[x+1] - 10 < prevDensityY[x+1]) {
+          const diff = (prevDensityY[x] - densityY[x+1]) * 0.05;
+          densityY[x] -= diff;
+          densityY[x+1] += diff;
+        }
+        // FLOW DOWN
+        if (y < numSquaresY && this.terrain[y+1][x] < prevDensity[y+1][x]) {
+          const diff = (prevDensityY[x] - density[y+1][x]) * 0.05;
+          densityY[x] -= diff;
+          density[y+1][x] += diff;
+        }
+
+*/

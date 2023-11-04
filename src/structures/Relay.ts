@@ -20,7 +20,7 @@ export class Relay extends BaseStructure {
 
   constructor(scene: GameScene, coordX: number, coordY: number) {
     super(scene, coordX, coordY);
-    this.sprite = this.scene.add.sprite(this.x, this.y, 'relay').setDepth(12).setAlpha(0.3);
+    this.sprite = this.scene.add.sprite(this.x, this.y, 'relay').setDepth(5000).setAlpha(0.3);
   }
 
   static generateTextures(scene: Phaser.Scene) {

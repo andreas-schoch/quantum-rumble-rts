@@ -39,8 +39,8 @@ export default class GameScene extends Phaser.Scene {
   }
 
   private create() {
-    // TODO render thresholds as needed depending on max density + elevation (once there is a non-flat terrain)
-    this.creeperFlow = new CreeperFlow(this, {squareSize: GRID, numSquaresX: WORLD_X - 1, numSquaresY: WORLD_Y, tileDensityMax: 512, tileDensityThreshold: [16, 32, 48, 64, 80, 96, 112, 128, 144, 160, 176, 192]});
+    // TODO render thresholds as needed depending on max density + elevation (once there is a non-flat terrain)                                                0-16          17-128
+    this.creeperFlow = new CreeperFlow(this, {squareSize: GRID, numSquaresX: WORLD_X - 1, numSquaresY: WORLD_Y, tileDensityMax: 512, tileDensityThreshold: [16, 32, 48,    64, 80, 9,    112, 128, 144,    160, 176, 192,    208, 224, 240,    256]});
     this.sfx_start_collect = this.sound.add('start_collect', {detune: 600, rate: 1.25, volume: 0.5 , loop: false});
     this.sfx_place_structure = this.sound.add('place_structure', {detune: 200, rate: 1.25, volume: 1 , loop: false});
 
@@ -53,10 +53,17 @@ export default class GameScene extends Phaser.Scene {
     this.network.placeStructure(this.city.coordX, this.city.coordY, this.city);
     this.network.startCollecting(this.city);
 
-    this.creeperFlow.addEmitter(2, 2, 1024);
-    this.creeperFlow.addEmitter(WORLD_X - 2, 2, 1024);
-    this.creeperFlow.addEmitter(2, WORLD_Y - 2, 1024);
-    this.creeperFlow.addEmitter(WORLD_X - 2, WORLD_Y - 2, 1024);
+    const id1 = this.creeperFlow.addEmitter(2, 2, 2120);
+    const id2 = this.creeperFlow.addEmitter(WORLD_X - 2, 2, 2280);
+    const id3 = this.creeperFlow.addEmitter(2, WORLD_Y - 2, 2040);
+    const id4 = this.creeperFlow.addEmitter(WORLD_X - 2, WORLD_Y - 2, 2040);
+
+    // setTimeout(() => {
+    //   this.creeperFlow.removeEmitter(id1);
+    //   this.creeperFlow.removeEmitter(id2);
+    //   this.creeperFlow.removeEmitter(id3);
+    //   this.creeperFlow.removeEmitter(id4);
+    // }, 7000);
 
     this.tickCounter = 0;
     // Only rendering related things should happen every frame. I potentially want to be able to simulate this game on a server, so it needs to be somewhat deterministic
@@ -67,8 +74,8 @@ export default class GameScene extends Phaser.Scene {
         this.tickCounter++;
         console.time('tick');
         this.creeperFlow.diffuse(this.tickCounter);
-        this.creeperFlow.tick();
         console.timeEnd('tick');
+        this.creeperFlow.tick();
         this.network.tick(this.tickCounter);
         this.city.tick(this.tickCounter);
         for(const structure of BaseStructure.structuresInUpdatePriorityOrder) structure.tick(this.tickCounter);

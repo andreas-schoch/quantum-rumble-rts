@@ -173,9 +173,9 @@ export abstract class BaseStructure {
       cellBefore.ref = null;
       cellAfter.ref = this;
     } else if (cellAfter.ref) {
-      this.sprite && this.sprite.setTint(0xff0000).setDepth(100);
+      this.sprite && this.sprite.setTint(0xff0000).setDepth(500);
     } else {
-      this.sprite && this.sprite.clearTint().setDepth(12);
+      this.sprite && this.sprite.clearTint().setDepth(500);
     }
 
     return true;

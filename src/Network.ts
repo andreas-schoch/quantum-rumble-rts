@@ -39,8 +39,8 @@ export class Network {
     // workerInstance.
     this.remoteGraph = wrap(workerInstance);
     this.scene = scene;
-    this.previewEdgeSprite = this.scene.add.sprite(0, 0, 'cell_green').setDepth(10).setOrigin(0, 0.5);
-    this.previewEdgeRenderTexture = this.scene.add.renderTexture(0, 0, WORLD_X * GRID, WORLD_Y * GRID).setDepth(10).setOrigin(0, 0).setAlpha(0.5);
+    this.previewEdgeSprite = this.scene.add.sprite(0, 0, 'cell_green').setDepth(499).setOrigin(0, 0.5);
+    this.previewEdgeRenderTexture = this.scene.add.renderTexture(0, 0, WORLD_X * GRID, WORLD_Y * GRID).setDepth(499).setOrigin(0, 0).setAlpha(0.5);
     this.previewEdgeSprite.setVisible(false);
     this.previewEdgeRenderTexture.draw(this.previewEdgeSprite);
   }
@@ -100,7 +100,7 @@ export class Network {
     const texture = request.type === 'ammo' ? 'energy_red' : 'energy';
     const duration = (energyPath.distance / this.speed) * 1000;
     const energyBall: Energy = {follower: this.scene.add.follower(path, points[0], points[1], texture), id: this.generateId()};
-    energyBall.follower.setScale(1).setDepth(100);
+    energyBall.follower.setScale(1).setDepth(501);
     energyBall.follower.startFollow({duration, repeat: 0, onComplete: () => {
       energyBall.follower.destroy();
       request.requester.receiveEnergy(request);
@@ -214,7 +214,7 @@ export class Network {
       const euclideanDistance = Math.sqrt(Math.pow(ref.x - cell.ref.x, 2) + Math.pow(ref.y - cell.ref.y, 2));
       if (manhattanDistance > cell.ref.connectionRange || Math.round(euclideanDistance) === 0) continue; // won't connect if neighbour has a smaller connection range
       const angle = Math.atan2(cell.ref.y - ref.y, cell.ref.x - ref.x);
-      const sprite = this.scene.add.sprite(ref.x, ref.y, this.getEdgeSpriteTexture(euclideanDistance)).setDepth(10).setOrigin(0, 0.5).setRotation(angle);
+      const sprite = this.scene.add.sprite(ref.x, ref.y, this.getEdgeSpriteTexture(euclideanDistance)).setDepth(499).setOrigin(0, 0.5).setRotation(angle);
       this.graph.createEdge(ref.id, cell.ref.id, euclideanDistance, sprite);
       this.remoteGraph.createEdge(ref.id, cell.ref.id, euclideanDistance, 'sprite placeholder');
     }
