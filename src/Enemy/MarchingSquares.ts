@@ -22,8 +22,6 @@ export interface ISquareDensityData {
   // TODO not sure whether I want to pass threshold and maxDensity here for every square. Might be convenient sometimes but often redundant
   /** Min Density corners need to have to be considered solid */
   threshold: number;
-  /** Max allowed Density any corner can have */
-  maxDensity: number;
 }
 
 export interface ISquareGeomData {

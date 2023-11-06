@@ -17,7 +17,7 @@ export default class GameScene extends Phaser.Scene {
   city!: City;
   network!: Network;
 
-  private structureToBuild: string | null = null; // TODO fix this
+  private pointerAction: string | null = null; // TODO fix this
   pointerX: number | null = null;
   pointerY: number | null = null;
   pointerCoordX: number | null = null;
@@ -40,11 +40,12 @@ export default class GameScene extends Phaser.Scene {
 
   private create() {
     // TODO render thresholds as needed depending on max density + elevation (once there is a non-flat terrain)                                                0-16          17-128
-    this.creeperFlow = new CreeperFlow(this, {squareSize: GRID, numSquaresX: WORLD_X - 1, numSquaresY: WORLD_Y, tileDensityMax: 512, tileDensityThreshold: [16, 32, 48,    64, 80, 9,    112, 128, 144,    160, 176, 192,    208, 224, 240,    256]});
+    this.creeperFlow = new CreeperFlow(this);
+    // this.creeperFlow = new CreeperFlow(this, {squareSize: GRID, numSquaresX: WORLD_X - 1, numSquaresY: WORLD_Y, tileDensityMax: 512, tileDensityThreshold: [16, 64, 112, 160]});
     this.sfx_start_collect = this.sound.add('start_collect', {detune: 600, rate: 1.25, volume: 0.5 , loop: false});
     this.sfx_place_structure = this.sound.add('place_structure', {detune: 200, rate: 1.25, volume: 1 , loop: false});
 
-    // this.add.tileSprite(0, 0, GRID * WORLD_X,GRID * WORLD_Y, 'cell_white').setOrigin(0, 0);
+    this.add.tileSprite(0, 0, GRID * WORLD_X,GRID * WORLD_Y, 'cell_white').setOrigin(0, 0).setDepth(10000).setAlpha(0.2);
     this.setupCameraAndInput();
     this.observer.removeAllListeners();
     this.network = new Network(this);
@@ -53,10 +54,11 @@ export default class GameScene extends Phaser.Scene {
     this.network.placeStructure(this.city.coordX, this.city.coordY, this.city);
     this.network.startCollecting(this.city);
 
-    const id1 = this.creeperFlow.addEmitter(2, 2, 2120);
-    const id2 = this.creeperFlow.addEmitter(WORLD_X - 2, 2, 2280);
-    const id3 = this.creeperFlow.addEmitter(2, WORLD_Y - 2, 2040);
-    const id4 = this.creeperFlow.addEmitter(WORLD_X - 2, WORLD_Y - 2, 2040);
+    // const id1 = this.creeperFlow.addEmitter(2, 2, 512);
+    // const id2 = this.creeperFlow.addEmitter(WORLD_X - 2, 2, 512);
+    // const id3 = this.creeperFlow.addEmitter(2, WORLD_Y - 2, 512);
+    // const id4 = this.creeperFlow.addEmitter(WORLD_X - 2, WORLD_Y - 2, 512);
+    // const id5 = this.creeperFlow.addEmitter(WORLD_X / 2, WORLD_Y / 2, 512);
 
     // setTimeout(() => {
     //   this.creeperFlow.removeEmitter(id1);
@@ -71,14 +73,16 @@ export default class GameScene extends Phaser.Scene {
       delay: TICK_RATE,
       timeScale: 1,
       callback: () => {
+        // stats.begin();
         this.tickCounter++;
-        console.time('tick');
+        // console.time('tick');
         this.creeperFlow.diffuse(this.tickCounter);
-        console.timeEnd('tick');
         this.creeperFlow.tick();
+        // console.timeEnd('tick');
         this.network.tick(this.tickCounter);
         this.city.tick(this.tickCounter);
         for(const structure of BaseStructure.structuresInUpdatePriorityOrder) structure.tick(this.tickCounter);
+        // stats.end();
       },
       callbackScope: this,
       loop: true
@@ -114,6 +118,7 @@ export default class GameScene extends Phaser.Scene {
     const keyFOUR = keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.FOUR);
     const keyFIVE = keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.FIVE);
     const keySIX = keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.SIX);
+    const keyZERO = keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.ZERO);
     const keyESC = keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.ESC);
     const keyX = keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.X);
 
@@ -156,44 +161,65 @@ export default class GameScene extends Phaser.Scene {
 
     // TODO deduplicate
     keyONE.onDown = () => {
-      this.structureToBuild = Collector.name;
+      this.pointerAction = Collector.name;
       this.network.previewCancel();
-      this.network.previewStructure(this.pointerCoordX, this.pointerCoordY, this.structureToBuild);
+      this.network.previewStructure(this.pointerCoordX, this.pointerCoordY, this.pointerAction);
     };
     keyTWO.onDown = () => {
-      this.structureToBuild = Weapon.name;
+      this.pointerAction = Weapon.name;
       this.network.previewCancel();
-      this.network.previewStructure(this.pointerCoordX, this.pointerCoordY, this.structureToBuild);
+      this.network.previewStructure(this.pointerCoordX, this.pointerCoordY, this.pointerAction);
     };
     keyTHREE.onDown = () => {
-      this.structureToBuild = Relay.name;
+      this.pointerAction = Relay.name;
       this.network.previewCancel();
-      this.network.previewStructure(this.pointerCoordX, this.pointerCoordY, this.structureToBuild);
+      this.network.previewStructure(this.pointerCoordX, this.pointerCoordY, this.pointerAction);
     };
     keyFOUR.onDown = () => {
-      this.structureToBuild = Storage.name;
+      this.pointerAction = Storage.name;
       this.network.previewCancel();
-      this.network.previewStructure(this.pointerCoordX, this.pointerCoordY, this.structureToBuild);
+      this.network.previewStructure(this.pointerCoordX, this.pointerCoordY, this.pointerAction);
     };
     keyFIVE.onDown = () => {
-      this.structureToBuild = Reactor.name;
+      this.pointerAction = Reactor.name;
       this.network.previewCancel();
-      this.network.previewStructure(this.pointerCoordX, this.pointerCoordY, this.structureToBuild);
+      this.network.previewStructure(this.pointerCoordX, this.pointerCoordY, this.pointerAction);
     };
     keySIX.onDown = () => {
-      this.structureToBuild = Speed.name;
+      this.pointerAction = Speed.name;
       this.network.previewCancel();
-      this.network.previewStructure(this.pointerCoordX, this.pointerCoordY, this.structureToBuild);
+      this.network.previewStructure(this.pointerCoordX, this.pointerCoordY, this.pointerAction);
     };
     keyESC.onDown = () => {
-      this.structureToBuild = null;
+      this.pointerAction = null;
       this.network.previewCancel();
-      this.network.previewStructure(this.pointerCoordX, this.pointerCoordY, this.structureToBuild);
+      this.network.previewStructure(this.pointerCoordX, this.pointerCoordY, this.pointerAction);
     };
+    const texts: Record<string, Phaser.GameObjects.Text> = {};
     keyX.onDown = () => {
-      this.structureToBuild = null;
-      this.network.previewCancel();
-      this.network.previewStructure(this.pointerCoordX, this.pointerCoordY, this.structureToBuild);
+      // this.structureToBuild = null;
+      // this.network.previewCancel();
+      // this.network.previewStructure(this.pointerCoordX, this.pointerCoordY, this.structureToBuild);
+
+      console.time('x');
+
+      this.creeperFlow.diffuse(++this.tickCounter);
+      this.creeperFlow.tick();
+      console.timeEnd('x');
+      for (const [y, densityY] of this.creeperFlow.creeper.entries()) {
+        for (const [x, density] of densityY.entries()) {
+          const key = `${y}-${x}`;
+          const text = texts[key]
+            ? texts[key].setText((density + this.creeperFlow.terrain[y][x]).toFixed(2))
+            : this.add.text(x * GRID, y * GRID, (density + this.creeperFlow.terrain[y][x]).toFixed(2), {fontSize: '10px', color: '#ffffff'}).setDepth(100000000);
+          texts[key] = text;
+        }
+      }
+    };
+
+    keyZERO.onDown = () => {
+      console.log('select emit action');
+      this.pointerAction = 'emit';
     };
 
     // MOUSE AND POINTER STUFF
@@ -208,21 +234,29 @@ export default class GameScene extends Phaser.Scene {
       const pointerCoordX = Math.floor(worldX / GRID);
       const pointerCoordY = Math.floor(worldY / GRID);
       // Compare with previous to avoid unnecessary updates
-      if (!p.isDown && this.structureToBuild && (this.pointerCoordX !== pointerCoordX || this.pointerCoordY !== pointerCoordY)) {
-        this.network.previewStructure(pointerCoordX, pointerCoordY, this.structureToBuild);
+      if (!p.isDown && this.pointerAction && this.pointerAction !== 'emit' && (this.pointerCoordX !== pointerCoordX || this.pointerCoordY !== pointerCoordY)) {
+        this.network.previewStructure(pointerCoordX, pointerCoordY, this.pointerAction);
         this.pointerCoordX = pointerCoordX;
         this.pointerCoordY = pointerCoordY;
+      } else if (p.isDown && this.pointerAction === 'emit') {
+        this.creeperFlow.emit(pointerCoordX, pointerCoordY, 16);
       }
     });
 
-    input.on('pointerdown', () => {
-      if (!this.structureToBuild) return;
+    input.on('pointerdown', (p: Phaser.Input.Pointer) => {
+      if (!this.pointerAction) return;
+      this.pointerCoordX = Math.floor(p.worldX / GRID);
+      this.pointerCoordY = Math.floor(p.worldY / GRID);
       const {pointerCoordX, pointerCoordY} = this;
       if (pointerCoordX === null || pointerCoordY === null) return;
       if (pointerCoordX < 0 || pointerCoordY < 0 || pointerCoordX >= WORLD_DATA[0].length || pointerCoordY >= WORLD_DATA.length) return; // skip out of bounds
 
-      const structure = new STRUCTURE_BY_NAME[this.structureToBuild](this, pointerCoordX, pointerCoordY);
-      this.network.placeStructure(pointerCoordX, pointerCoordY, structure);
+      if (this.pointerAction === 'emit') {
+        this.creeperFlow.emit(pointerCoordX, pointerCoordY, 16);
+      } else {
+        const structure = new STRUCTURE_BY_NAME[this.pointerAction](this, pointerCoordX, pointerCoordY);
+        this.network.placeStructure(pointerCoordX, pointerCoordY, structure);
+      }
       // else console.log('TODO implement select'); // TODO find structure under click and select it (show info about it in the UI)
     });
 

@@ -17,6 +17,7 @@ export const RESOLUTION_SCALE: number = Number(localStorage.getItem(SETTINGS_KEY
 export const DEFAULT_ZOOM: number = 1;
 export const MAX_ZOOM: number = 2.5 * RESOLUTION_SCALE;
 export const MIN_ZOOM: number = 1/3 * RESOLUTION_SCALE;
+export const DEBUG = true;
 
 export const GRID = 40;
 export const HALF_GRID = GRID / 2;
@@ -53,23 +54,20 @@ const config: Phaser.Types.Core.GameConfig = {
     height: DEFAULT_HEIGHT * RESOLUTION_SCALE,
   },
   fps: {
-    // target: 30,
-    // min: 24,
-    // forceSetTimeOut: true,
     smoothStep: true
   },
-  // canvas: document.getElementById('game') as HTMLCanvasElement,
   parent: 'game', // DON'T use canvas as it will lead to horizontal scrollbar with fullHD resolution
-  // pixelArt: true,
-  // roundPixels: true,
-  // physics: {
-  //   default: 'arcade',
-  //   arcade: {
-  //     gravity: { y: 0 },
-  //     // debug: true
-  //   }
-  // },
   scene: [PreloadScene, GameScene]
 };
 
-new Game(config);
+window.addEventListener('load', () => {
+  new Game(config);
+
+  if (DEBUG) {
+    // Display fps and memory usage
+    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+    // @ts-ignore
+    (function(){const script=document.createElement('script');script.onload=function(){const stats=new Stats();document.body.appendChild(stats.dom);requestAnimationFrame(function loop(){stats.update();requestAnimationFrame(loop);});};script.src='https://mrdoob.github.io/stats.js/build/stats.min.js';document.head.appendChild(script);})();
+
+  }
+});
