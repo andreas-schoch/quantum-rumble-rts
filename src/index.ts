@@ -1,63 +1,32 @@
 import { Game, WEBGL } from 'phaser';
 import GameScene from './scenes/GameScene';
 import PreloadScene from './scenes/PreloadScene';
-import { Weapon } from './structures/Weapon';
+import GameUIScene from './scenes/GameUIScene';
+import { DEFAULT_WIDTH, RESOLUTION_SCALE, DEFAULT_HEIGHT, DEBUG } from './constants';
 import { Collector } from './structures/Collector';
-import { Cell, City } from './structures/City';
-import { Relay } from './structures/Relay';
-import { Storage } from './structures/Storage';
 import { Reactor } from './structures/Reactor';
+import { Relay } from './structures/Relay';
 import { Speed } from './structures/Speed';
-
-export const SETTINGS_KEY_RESOLUTION = 'quantum_rumble_resolution';
-
-export const DEFAULT_WIDTH = 1920;
-export const DEFAULT_HEIGHT = 1080;
-export const RESOLUTION_SCALE: number = Number(localStorage.getItem(SETTINGS_KEY_RESOLUTION) || 1);
-export const DEFAULT_ZOOM: number = 1;
-export const MAX_ZOOM: number = 2.5 * RESOLUTION_SCALE;
-export const MIN_ZOOM: number = 1/3 * RESOLUTION_SCALE;
-export const DEBUG = true;
-
-export const GRID = 40;
-export const HALF_GRID = GRID / 2;
-export const WORLD_X = 64;
-export const WORLD_Y = 64;
-export const WORLD_DATA: Cell[][] = []; // TODO maybe temporary until deciding weather to merge with graph (use vertices as cells)
-
-export const TICK_RATE = 50; // ms
-export const TICK_DELTA = TICK_RATE / 1000; // it's easier to change tickrate when things are scaled to a second
-
-export const STRUCTURE_BY_NAME = {
-  [Weapon.name]: Weapon,
-  [Collector.name]: Collector,
-  [City.name]: City,
-  [Relay.name]: Relay,
-  [Storage.name]: Storage,
-  [Reactor.name]: Reactor,
-  [Speed.name]: Speed,
-};
-
-export const enum SceneKeys {
-  PRELOAD_SCENE = 'PreloadScene',
-  GAME_SCENE = 'GameScene',
-  GAME_UI_SCENE = 'GameUIScene',
-}
+import { Storage } from './structures/Storage';
+import { BaseWeaponStructure } from './structures/Weapon';
 
 const config: Phaser.Types.Core.GameConfig = {
   type: WEBGL,
   backgroundColor: '0xffffff',
+
   scale: {
     mode: Phaser.Scale.FIT,
     autoCenter: Phaser.Scale.CENTER_BOTH,
     width: DEFAULT_WIDTH * RESOLUTION_SCALE,
     height: DEFAULT_HEIGHT * RESOLUTION_SCALE,
   },
-  fps: {
-    smoothStep: true
+  dom: {
+    createContainer: true,
+    // behindCanvas: true,
   },
+  disableContextMenu: true,
   parent: 'game', // DON'T use canvas as it will lead to horizontal scrollbar with fullHD resolution
-  scene: [PreloadScene, GameScene]
+  scene: [PreloadScene, GameScene, GameUIScene]
 };
 
 window.addEventListener('load', () => {
@@ -68,6 +37,18 @@ window.addEventListener('load', () => {
     // eslint-disable-next-line @typescript-eslint/ban-ts-comment
     // @ts-ignore
     (function(){const script=document.createElement('script');script.onload=function(){const stats=new Stats();document.body.appendChild(stats.dom);requestAnimationFrame(function loop(){stats.update();requestAnimationFrame(loop);});};script.src='https://mrdoob.github.io/stats.js/build/stats.min.js';document.head.appendChild(script);})();
-
   }
 });
+
+export type Unit = typeof Collector | typeof Relay | typeof BaseWeaponStructure | typeof Storage | typeof Speed | typeof Reactor;
+export const UNITS: Unit[] = [
+  Collector,
+  Relay,
+  BaseWeaponStructure,
+  BaseWeaponStructure,
+  BaseWeaponStructure,
+  BaseWeaponStructure,
+  Storage,
+  Speed,
+  Reactor
+];

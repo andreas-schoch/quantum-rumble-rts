@@ -1,0 +1,182 @@
+<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/npm/normalize.css@8.0.1/normalize.css" rel="stylesheet">
+<link href="assets/html/base.css" rel="stylesheet">
+
+<style>
+
+  #game-ui {
+    width: 1920px;
+    height: 1080px;
+    color: white;
+    font-size: 16px;
+    position: relative;
+  }
+
+  /* ============= */
+  /* = ACTIONBAR = */
+  /* ============= */
+  #actionbar {
+    position: absolute;
+    left: 50%;
+    bottom: 0;
+    background-color: #313131;
+    display: flex;
+    flex-direction: row;
+    border-top-left-radius: 10px;
+    border-top-right-radius: 10px;
+    padding: 10px;
+    transform: translateX(-50%);
+    pointer-events: auto !important;
+  }
+
+  #unit-selector {
+    display: grid;
+    grid-template-columns: repeat(9, 1fr);
+    gap: 10px;
+  }
+
+  #unit-selector .unit {
+    position: relative;
+    font-size: 13px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    align-self: center;
+    width: 125px;
+    height: 75px;
+    background-color: rgba(255, 255, 255, 0.2);
+    border-radius: 5px;
+    padding: 8px;
+    cursor: pointer;
+    margin: 0;
+  }
+
+  #unit-selector .unit:hover {
+    background-color: rgba(255, 255, 255, 0.4);
+  }
+
+  #unit-selector .unit.selected {
+  background-color: red;
+  }
+
+  #unit-selector .unit-hotkey {
+    position: absolute;
+    top: -20px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 14px;
+    color: rgba(255, 255, 255, 0.4);
+    font-weight: bold;
+  }
+
+  #unit-selector .unit-name {
+    font-size: 12px;
+  }
+
+  #unit-selector .unit-img {
+    width: 40px;
+    height: 40px;
+    margin: 0 auto;
+  }
+
+  .unit-cost {
+    position: absolute;
+    bottom: 6px;
+    right: 6px;
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.4);
+  }
+
+  /* ================ */
+  /* = ENERGY STATS = */
+  /* ================ */
+  #energy-stats {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 400px;
+    display: flex;
+    flex-direction: column;
+    padding: 10px 20px 20px;
+    background-color: #313131;
+    border-bottom-left-radius: 10px;
+    border-bottom-right-radius: 10px;
+  }
+
+  #energy {
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    height: 30px;
+    margin-bottom: 10px;
+    font-size: 14px;
+  }
+
+  #energy-title {
+    font-size: 18px;
+    font-weight: bold;
+  }
+
+  #energy-consumption {
+    color: red;
+  }
+
+  #energy-production {
+    color: green;
+  }
+
+  #energy-storage-wrapper {
+    position: relative;
+    width: 100%;
+    height: 35px;
+    background-color: rgba(255, 255, 255, 0.2);
+    border-radius: 10px;
+  }
+
+  #energy-storage-text {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+  }
+
+  #energy-storage-progress {
+    width: 20%;
+    height: 100%;
+    background-color: green;
+    border-radius: 10px;
+  }
+
+</style>
+
+<div id="game-ui">
+
+  <div id="actionbar">
+    <div id="unit-selector">
+      <template id="unit-template">
+        <div class="unit">
+          <div class="unit-hotkey">1</div>
+          <div class="unit-name">Temp</div>
+          <img class="unit-img" src="" alt="unit" />
+          <div class="unit-cost">25</div>
+        </div>
+      </template>
+    </div>
+  </div>
+
+<div id="energy-stats">
+  <div id="energy">
+    <div id="energy-consumption">-10.9</div>
+    <div id="energy-title">Energy</div>
+    <div id="energy-production">+15.3</div>
+  </div>
+
+  <span id="energy-storage-wrapper">
+    <div id="energy-storage-text">20/100</div>
+    <div id="energy-storage-progress"></div>
+  </span>
+</div>
+
+</div>

@@ -1,21 +1,21 @@
-import { Cell, EnergyRequest } from './City';
+import { Cell } from '../Network';
+import { EnergyRequest } from '../Network';
 import GameScene from '../scenes/GameScene';
-import { GRID, WORLD_DATA } from '..';
+import { GRID, WORLD_X, WORLD_Y } from '../constants';
 import { BaseStructure } from './BaseStructure';
 
-export class Weapon extends BaseStructure {
-  name = 'Weapon';
-  isRelay = false;
-  movable = true;
-  connectionRange = 5;
-  energyCollectionRange = 0;
-  energyProduction = 0;
+export class BaseWeaponStructure extends BaseStructure {
+  static unitName = 'Weapon';
+  static buildCost = 5;
+  static isRelay = false;
+  static movable = true;
+  static connectionRange = 5;
+  static energyCollectionRange = 0;
+  static energyProduction = 0;
+  static energyStorageCapacity = 0;
+  static healthMax = 100;
 
-  energyStorageCapacity = 0;
-  healthMax = 100;
-  buildCost = 5;
   ammoCost = 0.25;
-
   updatePriority = 1;
 
   ammoMax = 10;
@@ -31,7 +31,7 @@ export class Weapon extends BaseStructure {
 
   constructor(scene: GameScene, coordX: number, coordY: number) {
     super(scene, coordX, coordY);
-    if (!Weapon.attackSFX) Weapon.attackSFX = scene.sound.add('attack_turret', {detune: -200, rate: 1.25, volume: 0.5 , loop: false});
+    if (!BaseWeaponStructure.attackSFX) BaseWeaponStructure.attackSFX = scene.sound.add('attack_turret', {detune: -200, rate: 1.25, volume: 0.5 , loop: false});
     this.graphics = scene.add.graphics();
     this.draw();
   }
@@ -74,7 +74,7 @@ export class Weapon extends BaseStructure {
     this.ammoCurrent -= this.ammoCost;
     this.lastAttack = tickCounter;
     this.draw();
-    Weapon.attackSFX.play();
+    BaseWeaponStructure.attackSFX.play();
     this.scene.creeperFlow.damage(this.coordX, this.coordY, 20);
   }
 
@@ -84,8 +84,8 @@ export class Weapon extends BaseStructure {
 
     for (let y = this.coordY - this.attackRange; y <= this.coordY + this.attackRange; y++) {
       for (let x = this.coordX - this.attackRange; x <= this.coordX + this.attackRange; x++) {
-        if (x < 0 || y < 0 || x >= WORLD_DATA.length || y >= WORLD_DATA[0].length) continue; // skip out of bounds
-        const cell = WORLD_DATA[y][x];
+        if (x < 0 || y < 0 || x >= WORLD_X || y >= WORLD_Y) continue; // skip out of bounds
+        const cell = this.scene.network.world[y][x];
         if (!cell.ref) continue; // skip empty cells
         const distance = Math.abs(x - this.coordX) + Math.abs(y - this.coordY); // manhattan distance, not euclidean
         if (distance > this.attackRange) continue; // skip cells that are out of range

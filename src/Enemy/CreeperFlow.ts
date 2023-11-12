@@ -1,44 +1,17 @@
-import { ISquareDensityData, MarchingSquaresLookup } from './MarchingSquares';
+import { ISquareDensityData, MarchingSquares } from './MarchingSquares';
 import { NoiseFunction2D, createNoise2D } from 'simplex-noise';
-import { GRID, TICK_DELTA, WORLD_X, WORLD_Y } from '..';
+import { GRID, TICK_DELTA, WORLD_X, WORLD_Y } from '../constants';
 import { GameObjects, Scene } from 'phaser';
-
-export interface TerrainConfig {
-  wallColor: number;
-  elevationMax: number;
-  terrainLayers: TerrainLayer[];
-  creeperElevationThresholds: number[];
-}
-
-export interface TerrainLayer {
-  threshold: number;
-  depth: number;
-  color: number;
-}
-
-export interface IRenderQueueItem {
-  x: number;
-  y: number;
-  WORLD_X: number;
-  WORLD_Y: number;
-  threshold: number[];
-}
-
-export interface Emitter {
-  id: string;
-  xCoord: number;
-  yCoord: number;
-  creeperPerSecond: number;
-}
+import { Emitter } from '../types/types';
 
 const defaultTerrainConfig: TerrainConfig = {
   wallColor: 0x9b938d - 0x111111,
   elevationMax: 256,
   terrainLayers: [
-    {threshold: 0, depth: 0, color: 0x544741},
-    {threshold: 48 * 1, depth: 48 * 1, color: 0x544741 + 0x050505},
-    {threshold: 96 * 1, depth: 96 * 1, color: 0x544741 + 0x111111},
-    {threshold: 144 * 1, depth: 144 * 1, color: 0x544741 + 0x151515},
+    {elevation: 0, depth: 0, color: 0x544741},
+    {elevation: 48 * 1, depth: 48 * 1, color: 0x544741 + 0x050505},
+    {elevation: 96 * 1, depth: 96 * 1, color: 0x544741 + 0x111111},
+    {elevation: 144 * 1, depth: 144 * 1, color: 0x544741 + 0x151515},
     // {threshold: 192, depth: 192, color: 0x544741 + 0x222222},
     // {threshold: 240, depth: 240, color: 0x544741 + 0x252525},
   ],
@@ -58,7 +31,7 @@ export class CreeperFlow {
   emitters: Emitter[] = [];
 
   private readonly terrainGraphics: Map<number, GameObjects.Graphics> = new Map();
-  private readonly marchingSquares: MarchingSquaresLookup;
+  private readonly marchingSquares: MarchingSquares;
   private readonly noise: NoiseFunction2D = createNoise2D();
   prevTotal: number;
   g: GameObjects.Graphics;
@@ -70,7 +43,7 @@ export class CreeperFlow {
     this.scene = scene;
     this.config = config;
 
-    this.marchingSquares = new MarchingSquaresLookup({
+    this.marchingSquares = new MarchingSquares({
       squareSize: GRID,
       densityMax: config.elevationMax,
     });
@@ -93,7 +66,7 @@ export class CreeperFlow {
     graphics.fillStyle(BASE_TERRAIN_COLOR, 1);
     graphics.fillRect(0, 0, WORLD_X * GRID, WORLD_Y * GRID);
     // ELEVATION LAYERS
-    for (const {threshold, color, depth} of defaultTerrainConfig.terrainLayers) {
+    for (const {elevation: threshold, color, depth} of defaultTerrainConfig.terrainLayers) {
       const graphics = this.scene.add.graphics().setDepth(depth).setName('terrain').setAlpha(1);
       graphics.lineStyle(2, 0x000000);
       for (let y = 0; y < WORLD_Y; y++) {
@@ -159,7 +132,7 @@ export class CreeperFlow {
       const creeperY = creeper[y];
       const prevCreeperY = prevCreeper[y];
       for (let x = 0; x <= WORLD_X; x++) {
-        prevCreeperY[x] = Math.max(Math.min(creeperY[x], this.config.elevationMax), 0);
+        prevCreeperY[x] = Math.max(Math.min(creeperY[x], this.config.elevationMax * 10), 0);
         totalCreeper += prevCreeperY[x];
       }
     }
@@ -179,9 +152,7 @@ export class CreeperFlow {
       const creeperY = creeper[y];
       const terrainY = this.terrain[y];
       for (let x = 0; x <= WORLD_X; x++) {
-        // EVAPORATE
-        prevCreeperY[x] = Math.max(prevCreeperY[x] - 0.025, 0);
-
+        if (prevCreeperY[x] <= 8) prevCreeperY[x] = Math.max(prevCreeperY[x] - 0.025, 0); // evaporate
         for (const [dx, dy] of this.flowNeighbours) {
           const newX = x + dx;
           const newY = y + dy;
@@ -294,3 +265,24 @@ export class CreeperFlow {
     return x >= 0 && y >= 0 && x < WORLD_X && y < WORLD_Y;
   }
 }
+export interface TerrainConfig {
+    wallColor: number;
+    elevationMax: number;
+    terrainLayers: TerrainLayer[];
+    creeperElevationThresholds: number[];
+}
+
+export interface TerrainLayer {
+    elevation: number;
+    depth: number;
+    color: number;
+}
+
+export interface IRenderQueueItem {
+    x: number;
+    y: number;
+    WORLD_X: number;
+    WORLD_Y: number;
+    threshold: number[];
+}
+

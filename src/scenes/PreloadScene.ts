@@ -1,4 +1,4 @@
-import {GRID, SceneKeys} from '..';
+import { GRID, SceneKeys } from '../constants';
 import { Storage } from '../structures/Storage';
 import { City } from '../structures/City';
 import { Collector } from '../structures/Collector';
@@ -15,6 +15,8 @@ export default class PreloadScene extends Phaser.Scene {
     this.load.audio('place_structure', ['assets/audio/sfx/place_structure/click.wav',]);
     this.load.audio('start_collect', ['assets/audio/sfx/start_collect/sharp_echo.wav',]);
     this.load.audio('attack_turret', ['assets/audio/sfx/attack_turret/footstep_concrete_001.ogg',]);
+    this.load.audio('theme', ['assets/audio/music/Kevin MacLeod/Shadowlands 4 - Breath.mp3',]);
+    this.load.html('dom_game_ui', 'assets/html/game_ui.html');
   }
 
   create() {

@@ -41,7 +41,8 @@ module.exports = {
     new HtmlWebpackPlugin({gameName: 'Quantum Rumble', template: 'index.html'}),
     new CopyWebpackPlugin({
       patterns: [
-        {from: 'public/audio', to: 'assets/audio'},
+        {from: 'assets/audio', to: 'assets/audio'},
+        {from: 'assets/html', to: 'assets/html'},
       ],
     }),
   ],

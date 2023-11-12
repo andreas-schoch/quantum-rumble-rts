@@ -1,4 +1,4 @@
-import { GRID } from '..';
+import { GRID } from '../constants';
 
 export interface IMarchingSquaresConfig {
   densityMax: number;
@@ -51,7 +51,7 @@ const DEFAULT_CONFIG: IMarchingSquaresConfig = {
 };
 
 // TODO make this into a Phaser plugin together with the SculptComponent. Maybe make it possible to easily hookup the renderQueue
-export class MarchingSquaresLookup {
+export class MarchingSquares {
   // TODO this is kind of like an intentional memory leak as there are millions of possible variations.
   //  Measure whether this is really worth it and how large it becomes after 30 mins of constantly generating random terrain
   polygonCache: Map<string, ISquareGeomData> = new Map();
@@ -125,7 +125,7 @@ export class MarchingSquaresLookup {
     index = index || this.getShapeIndex(data);
     if (index === 0) return 'empty-square';
     if (index === 15) return 'full-square';
-    const {tl, tr, br, bl} = MarchingSquaresLookup.floorDensityValues(data);
+    const {tl, tr, br, bl} = MarchingSquares.floorDensityValues(data);
     return `${tl}-${tr}-${br}-${bl}`;
   }
 

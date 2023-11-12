@@ -1,28 +1,25 @@
-import { GRID, HALF_GRID } from '..';
+import { GRID, HALF_GRID } from '../constants';
 import GameScene from '../scenes/GameScene';
 import { BaseStructure } from './BaseStructure';
 
 export class Storage extends BaseStructure {
-  name = 'Storage';
-  isRelay = false;
-  movable = false;
-  connectionRange = 5;
-  energyCollectionRange = 0;
-  energyCollectionRate = 0;
-  energyProduction = 0;
-
-  energyStorageCapacity = 20;
-  healthMax = 5;
-  ammoMax = 0;
-  buildCost = 20;
+  static unitName = 'Storage';
+  static buildCost = 20;
+  static isRelay = false;
+  static movable = false;
+  static connectionRange = 5;
+  static energyCollectionRange = 0;
+  static energyCollectionRate = 0;
+  static energyProduction = 0;
+  static energyStorageCapacity = 20;
+  static healthMax = 5;
 
   updatePriority = 10;
-
   sprite: Phaser.GameObjects.Sprite;
 
   constructor(scene: GameScene, coordX: number, coordY: number) {
     super(scene, coordX, coordY);
-    this.sprite = this.scene.add.sprite(this.x, this.y, 'storage').setDepth(500).setAlpha(0.3);
+    this.sprite = this.scene.add.sprite(this.x, this.y, Storage.unitName).setDepth(500).setAlpha(0.3);
   }
 
   static generateTextures(scene: Phaser.Scene) {
@@ -36,7 +33,7 @@ export class Storage extends BaseStructure {
     graphics.fillStyle(0x777777, 1);
     graphics.fillCircle(HALF_GRID, HALF_GRID, inner);
     graphics.strokeCircle(HALF_GRID, HALF_GRID, inner);
-    graphics.generateTexture('storage', GRID, GRID);
+    graphics.generateTexture(Storage.unitName, GRID, GRID);
     graphics.destroy();
   }
 }
