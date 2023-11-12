@@ -2,7 +2,7 @@ import { Cell } from '../Network';
 import { EnergyRequest } from '../Network';
 import GameScene from '../scenes/GameScene';
 import { GRID, WORLD_X, WORLD_Y } from '../constants';
-import { BaseStructure } from './BaseStructure';
+import { BaseStructure } from './BaseUnit';
 
 export class BaseWeaponStructure extends BaseStructure {
   static unitName = 'Weapon';

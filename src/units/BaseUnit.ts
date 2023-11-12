@@ -43,6 +43,7 @@ export abstract class BaseStructure {
   pendingBuild: EnergyRequest[] = [];
   pendingHealth: EnergyRequest[] = [];
   CLASS: Unit;
+  static type = 'structure';
 
   constructor(scene: GameScene, coordX: number, coordY: number) {
     this.scene = scene;

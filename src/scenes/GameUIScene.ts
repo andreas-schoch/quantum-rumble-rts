@@ -1,7 +1,7 @@
 import { GameObjects, Scene } from 'phaser';
 import { DEFAULT_WIDTH, EVENT_UNIT_SELECTION_CHANGE, SceneKeys } from '../constants';
 import { UNITS as UNIT_CLASSES } from '..';
-import { Collector } from '../structures/Collector';
+import { Collector } from '../units/Collector';
 import { EVENT_ENERGY_CONSUMPTION_CHANGE, EVENT_ENERGY_PRODUCTION_CHANGE, EVENT_ENERGY_STORAGE_CHANGE } from '../constants';
 import GameScene from './GameScene';
 

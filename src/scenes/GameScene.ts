@@ -1,8 +1,8 @@
 import { DEFAULT_WIDTH, DEFAULT_ZOOM, GRID, MAX_ZOOM, MIN_ZOOM, TICK_RATE, SceneKeys, WORLD_X, WORLD_Y, EVENT_UNIT_SELECTION_CHANGE } from '../constants';
 import { UNITS, Unit } from '..';
-import { City } from '../structures/City';
+import { City } from '../units/City';
 import { Network } from '../Network';
-import { BaseStructure } from '../structures/BaseStructure';
+import { BaseStructure } from '../units/BaseUnit';
 import { CreeperFlow } from '../Enemy/CreeperFlow';
 
 type CameraRotations = '0' | '90' | '180' | '270';
@@ -47,7 +47,7 @@ export default class GameScene extends Phaser.Scene {
     this.creeperFlow.addEmitter(2, 2, 512);
     this.creeperFlow.addEmitter(WORLD_X - 2, 2, 512);
     this.creeperFlow.addEmitter(2, WORLD_Y - 2, 512);
-    this.creeperFlow.addEmitter(WORLD_X - 2, WORLD_Y - 2, 51200);
+    this.creeperFlow.addEmitter(WORLD_X - 2, WORLD_Y - 2, 512);
 
     this.tickCounter = 0;
     // Only rendering related things should happen every frame. I potentially want to be able to simulate this game on a server, so it needs to be somewhat deterministic

@@ -3,12 +3,12 @@ import GameScene from './scenes/GameScene';
 import PreloadScene from './scenes/PreloadScene';
 import GameUIScene from './scenes/GameUIScene';
 import { DEFAULT_WIDTH, RESOLUTION_SCALE, DEFAULT_HEIGHT, DEBUG } from './constants';
-import { Collector } from './structures/Collector';
-import { Reactor } from './structures/Reactor';
-import { Relay } from './structures/Relay';
-import { Speed } from './structures/Speed';
-import { Storage } from './structures/Storage';
-import { BaseWeaponStructure } from './structures/Weapon';
+import { Collector } from './units/Collector';
+import { Reactor } from './units/Reactor';
+import { Relay } from './units/Relay';
+import { Speed } from './units/Speed';
+import { Storage } from './units/Storage';
+import { BaseWeaponStructure } from './units/BaseWeaponUnit';
 
 const config: Phaser.Types.Core.GameConfig = {
   type: WEBGL,

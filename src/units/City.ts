@@ -1,6 +1,6 @@
 import GameScene from '../scenes/GameScene';
 import { GRID, HALF_GRID } from '../constants';
-import { BaseStructure } from './BaseStructure';
+import { BaseStructure } from './BaseUnit';
 
 export class City extends BaseStructure {
   static unitName = 'City';

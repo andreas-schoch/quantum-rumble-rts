@@ -1,10 +1,10 @@
 import { GRID, SceneKeys } from '../constants';
-import { Storage } from '../structures/Storage';
-import { City } from '../structures/City';
-import { Collector } from '../structures/Collector';
-import { Relay } from '../structures/Relay';
-import { Reactor } from '../structures/Reactor';
-import { Speed } from '../structures/Speed';
+import { Storage } from '../units/Storage';
+import { City } from '../units/City';
+import { Collector } from '../units/Collector';
+import { Relay } from '../units/Relay';
+import { Reactor } from '../units/Reactor';
+import { Speed } from '../units/Speed';
 
 export default class PreloadScene extends Phaser.Scene {
   constructor() {

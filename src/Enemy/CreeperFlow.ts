@@ -12,7 +12,7 @@ const defaultTerrainConfig: TerrainConfig = {
     {elevation: 48 * 1, depth: 48 * 1, color: 0x544741 + 0x050505},
     {elevation: 96 * 1, depth: 96 * 1, color: 0x544741 + 0x111111},
     {elevation: 144 * 1, depth: 144 * 1, color: 0x544741 + 0x151515},
-    // {threshold: 192, depth: 192, color: 0x544741 + 0x222222},
+    {elevation: 192, depth: 192, color: 0x544741 + 0x222222},
     // {threshold: 240, depth: 240, color: 0x544741 + 0x252525},
   ],
   creeperElevationThresholds: [16, 32, 48, 64, 80, 96, 112, 128, 144, 160],
@@ -51,9 +51,9 @@ export class CreeperFlow {
     this.prevCreeper = this.generateMatrix();
     this.creeper = this.generateMatrix();
     this.terrain = this.generateMatrix((x, y) => {
-      const n1 = (this.noise(x / 8, y / 8) * this.config.elevationMax) * 0.3;
-      const n2 = (this.noise(x / 16, y / 16) * this.config.elevationMax) * 0.5;
-      const n3 = (this.noise(x / 48, y / 48) * this.config.elevationMax) * 1.25;
+      const n3 = Math.max((this.noise(x / 48, y / 48) * this.config.elevationMax) * 2, 0); // macro
+      const n2 = (this.noise(x / 32, y / 32) * this.config.elevationMax) * 1; // midlevel
+      const n1 = (this.noise(x / 16, y / 16) * this.config.elevationMax) * 1; // micro
       let n = Math.max(((n1 + n2 + n3) / 3), 0);
       if (n < 32) n = 0;
       return Math.max(n, 0);
@@ -249,10 +249,10 @@ export class CreeperFlow {
     const secondaryBL = secondary ? secondary[y+1][x] : 0;
 
     return {
-      tl: creeperTL >= 16 ? creeperTL + secondaryTL : creeperTL,
-      tr: creeperTR >= 16 ? creeperTR + secondaryTR : creeperTR,
-      br: creeperBR >= 16 ? creeperBR + secondaryBR : creeperBR,
-      bl: creeperBL >= 16 ? creeperBL + secondaryBL : creeperBL,
+      tl: creeperTL >= 1 ? creeperTL + secondaryTL : creeperTL,
+      tr: creeperTR >= 1 ? creeperTR + secondaryTR : creeperTR,
+      br: creeperBR >= 1 ? creeperBR + secondaryBR : creeperBR,
+      bl: creeperBL >= 1 ? creeperBL + secondaryBL : creeperBL,
       // tl: creeperTL,
       // tr: creeperTR,
       // br: creeperBR,

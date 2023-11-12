@@ -1,8 +1,8 @@
 import WebpackWorker from 'worker-loader!./workers/pathFinder.worker.ts';
 import GameScene from './scenes/GameScene';
 import { Graph, PathfinderResult } from './Graph';
-import { BaseStructure } from './structures/BaseStructure';
-import { City } from './structures/City';
+import { BaseStructure } from './units/BaseUnit';
+import { City } from './units/City';
 import { GRID, HALF_GRID, TICK_DELTA, WORLD_X, WORLD_Y } from './constants';
 import { Unit } from '.';
 import { Remote, wrap } from 'comlink';

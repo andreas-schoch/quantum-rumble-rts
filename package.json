@@ -1,6 +1,7 @@
 {
   "name": "quantum-rumble-rts",
   "version": "0.1.0",
+  "description": "An open source Creeper World like game made with Phaser3.",
   "scripts": {
     "start": "webpack serve --config webpack/webpack.dev.js",
     "build": "rimraf dist && webpack --config webpack/webpack.prod.js",
