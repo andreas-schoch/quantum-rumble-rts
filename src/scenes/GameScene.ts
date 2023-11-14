@@ -3,7 +3,7 @@ import { UNITS, Unit } from '..';
 import { City } from '../units/City';
 import { Network } from '../Network';
 import { BaseStructure } from '../units/BaseUnit';
-import { CreeperFlow } from '../Enemy/CreeperFlow';
+import { Terrain as Terrain } from '../terrain/Terrain';
 
 type CameraRotations = '0' | '90' | '180' | '270';
 export default class GameScene extends Phaser.Scene {
@@ -19,7 +19,7 @@ export default class GameScene extends Phaser.Scene {
   sfx_start_collect: Phaser.Sound.BaseSound;
   sfx_place_structure: Phaser.Sound.BaseSound;
   tickCounter: number;
-  creeperFlow: CreeperFlow;
+  terrain: Terrain;
   private selectedUnitClass: Unit | null;
 
   constructor() {
@@ -27,7 +27,7 @@ export default class GameScene extends Phaser.Scene {
   }
 
   private create() {
-    this.creeperFlow = new CreeperFlow(this);
+    this.terrain = new Terrain(this);
     this.sfx_start_collect = this.sound.add('start_collect', {detune: 600, rate: 1.25, volume: 0.5 , loop: false});
     this.sfx_place_structure = this.sound.add('place_structure', {detune: 200, rate: 1.25, volume: 1 , loop: false});
     this.add.tileSprite(0, 0, GRID * WORLD_X,GRID * WORLD_Y, 'cell_white').setOrigin(0, 0).setDepth(10000).setAlpha(0.2);
@@ -43,10 +43,10 @@ export default class GameScene extends Phaser.Scene {
     this.city = new City(this, Math.floor(WORLD_X / 2), Math.floor(WORLD_Y / 2));
     this.network.placeUnit(this.city.coordX, this.city.coordY, this.city);
 
-    this.creeperFlow.addEmitter(2, 2, 512);
-    this.creeperFlow.addEmitter(WORLD_X - 2, 2, 512);
-    this.creeperFlow.addEmitter(2, WORLD_Y - 2, 512);
-    this.creeperFlow.addEmitter(WORLD_X - 2, WORLD_Y - 2, 512);
+    this.terrain.addEmitter(2, 2, 512);
+    this.terrain.addEmitter(WORLD_X - 2, 2, 512);
+    this.terrain.addEmitter(2, WORLD_Y - 2, 512);
+    this.terrain.addEmitter(WORLD_X - 2, WORLD_Y - 2, 512);
 
     this.tickCounter = 0;
     // Only rendering related things should happen every frame. I potentially want to be able to simulate this game on a server, so it needs to be somewhat deterministic
@@ -56,9 +56,8 @@ export default class GameScene extends Phaser.Scene {
       callback: () => {
         this.tickCounter++;
         console.time('tick');
-        this.creeperFlow.diffuse(this.tickCounter);
+        this.terrain.tick(this.tickCounter);
         console.timeEnd('tick');
-        this.creeperFlow.tick();
         this.network.tick(this.tickCounter);
         for(const structure of BaseStructure.structuresInUpdatePriorityOrder) structure.tick(this.tickCounter);
       },

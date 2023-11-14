@@ -75,7 +75,7 @@ export class BaseWeaponStructure extends BaseStructure {
     this.lastAttack = tickCounter;
     this.draw();
     BaseWeaponStructure.attackSFX.play();
-    this.scene.creeperFlow.damage(this.coordX, this.coordY, 20);
+    this.scene.terrain.damage(this.coordX, this.coordY, 20);
   }
 
   protected getNearestTarget(): Cell | null {
