@@ -27,7 +27,6 @@ export default class GameScene extends Phaser.Scene {
   }
 
   private create() {
-    // TODO render thresholds as needed depending on max density + elevation (once there is a non-flat terrain)
     this.creeperFlow = new CreeperFlow(this);
     this.sfx_start_collect = this.sound.add('start_collect', {detune: 600, rate: 1.25, volume: 0.5 , loop: false});
     this.sfx_place_structure = this.sound.add('place_structure', {detune: 200, rate: 1.25, volume: 1 , loop: false});
@@ -56,7 +55,9 @@ export default class GameScene extends Phaser.Scene {
       timeScale: 1,
       callback: () => {
         this.tickCounter++;
+        console.time('tick');
         this.creeperFlow.diffuse(this.tickCounter);
+        console.timeEnd('tick');
         this.creeperFlow.tick();
         this.network.tick(this.tickCounter);
         for(const structure of BaseStructure.structuresInUpdatePriorityOrder) structure.tick(this.tickCounter);
@@ -150,28 +151,7 @@ export default class GameScene extends Phaser.Scene {
     keyEIGHT.onDown = () => this.selectUnit(7);
     keyNINE.onDown = () => this.selectUnit(8);
     keyESC.onDown = () => this.selectUnit(-1);
-
-    const texts: Record<string, Phaser.GameObjects.Text> = {};
-    keyX.onDown = () => {
-      // this.structureToBuild = null;
-      // this.network.previewCancel();
-      // this.network.previewStructure(this.pointerCoordX, this.pointerCoordY, this.structureToBuild);
-
-      console.time('x');
-
-      this.creeperFlow.diffuse(++this.tickCounter);
-      this.creeperFlow.tick();
-      console.timeEnd('x');
-      for (const [y, densityY] of this.creeperFlow.creeper.entries()) {
-        for (const [x, density] of densityY.entries()) {
-          const key = `${y}-${x}`;
-          const text = texts[key]
-            ? texts[key].setText((density + this.creeperFlow.terrain[y][x]).toFixed(2))
-            : this.add.text(x * GRID, y * GRID, (density + this.creeperFlow.terrain[y][x]).toFixed(2), {fontSize: '10px', color: '#ffffff'}).setDepth(100000000);
-          texts[key] = text;
-        }
-      }
-    };
+    keyX.onDown = () => this.selectUnit(-1);
 
     // MOUSE AND POINTER STUFF
     const input = this.input;

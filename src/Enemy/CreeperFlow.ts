@@ -43,10 +43,7 @@ export class CreeperFlow {
     this.scene = scene;
     this.config = config;
 
-    this.marchingSquares = new MarchingSquares({
-      squareSize: GRID,
-      densityMax: config.elevationMax,
-    });
+    this.marchingSquares = new MarchingSquares({squareSize: GRID});
 
     this.prevCreeper = this.generateMatrix();
     this.creeper = this.generateMatrix();
@@ -156,7 +153,14 @@ export class CreeperFlow {
         for (const [dx, dy] of this.flowNeighbours) {
           const newX = x + dx;
           const newY = y + dy;
-
+          // FIXME To make the terrain and creeper layers align correctly at borders I need to do something similar as in my other marching squares based project
+          // where water flows down from a sideway perspecvie and perfectly aligns with the terrain due to never allowing water+terrain to exceed max density
+          // Here I cannot just do `maxFlow = MAX_DENSITY-terrainDensity` because we work with multiply layers instead of just one in the sideways view...
+          // All layers work with the same density/elevation data so maybe I just need to manipulate the resulting densityData before densityGeomData is created
+          // E.g. a single point the terrain density is 10. The creeper density at the equivalent point needs to be set to 6 at that particular level (assuming 16 threshold)
+          // This is primarily for cosmetic reasons. Ideally we also treat any creeper density where it exceeds to the next level as empty, so it doesn't render.
+          // The problem with that is that I'd have to give up transparency or need to be able to automatically adjust it for the topmost layer...
+          // Maybe that won't be necessary once I switch to a proper isoband/isoline based rendering instead of tile based...
           if (newX >= 0 && newX <= WORLD_X && newY >= 0 && newY <= WORLD_Y) {
             const currentTotalElevation = prevCreeperY[x] + (Math.round(terrainY[x] / 16) * 16);
             const neighborTotalElevation = prevCreeper[newY][newX] + (Math.round(this.terrain[newY][newX] / 16) * 16);
@@ -232,7 +236,7 @@ export class CreeperFlow {
       graphics.fillRect(0, 0, GRID, GRID);
     } else {
       for (const points of polygons) graphics.fillPoints(points, true);
-      for (const l of isoLines) graphics.lineBetween(l.x1, l.y1, l.x2, l.y2);
+      for (const {p1, p2} of isoLines) graphics.lineBetween(p1.x, p1.y, p2.x, p2.y);
     }
     graphics.translateCanvas(-posX, -posY);
   }
@@ -285,4 +289,3 @@ export interface IRenderQueueItem {
     WORLD_Y: number;
     threshold: number[];
 }
-

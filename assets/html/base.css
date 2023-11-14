@@ -21,7 +21,6 @@
   -webkit-touch-callout: none; /* iOS Safari */
   -webkit-user-select: none; /* Safari */
   user-select: none;
-  /* pointer-events: none !important; */
 }
 
 canvas {
