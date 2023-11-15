@@ -19,8 +19,8 @@ export const DEBUG = true;
 
 export const GRID = 40;
 export const HALF_GRID = GRID / 2;
-export const WORLD_X = 128;
-export const WORLD_Y = 128;
+export const WORLD_X = 64;
+export const WORLD_Y = 64;
 export const TICK_RATE = 50; // ms
 export const TICK_DELTA = TICK_RATE / 1000; // it's easier to change tickrate when things are scaled to a second
 

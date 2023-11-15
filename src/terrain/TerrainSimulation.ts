@@ -15,11 +15,11 @@ export interface TerrainSimulationConfig {
 
 // Separate class to decouple from phaser dependencies irrelevant for simulation and make it easier to test
 export class TerrainSimulation {
-  readonly terrain: number[][];
-  readonly fluid: number[][];
+  readonly terrain: Float32Array;
+  readonly fluid: Float32Array;
+  private readonly prevFluid: Float32Array;
   private prevTotalFluidDensity: number;
   private readonly config: TerrainSimulationConfig;
-  private readonly prevFluid: number[][];
   private readonly flowNeighbours = [[1, 0], [-1, 0], [0, 1], [0, -1]];
   private readonly cellEdges = [[0, 0], [1, 0], [1, 1], [0, 1]]; // marching squares works on edges, while the rest of the game works on cells (consisting of 4 edges each)
   private readonly fluidChangeRequests: {xCoord: number, yCoord: number, amount: number}[] = [];
@@ -27,16 +27,21 @@ export class TerrainSimulation {
 
   constructor(config: TerrainSimulationConfig) {
     this.config = config;
-    this.prevFluid = this.generateMatrix();
-    this.fluid = this.generateMatrix();
-    this.terrain = this.generateMatrix((x, y) => {
-      const n3 = Math.max((this.noise(x / 48, y / 48) * config.terrain.elevationMax) * 2, 0); // macro
-      const n2 = (this.noise(x / 32, y / 32) * config.terrain.elevationMax) * 1; // midlevel
-      const n1 = (this.noise(x / 16, y / 16) * config.terrain.elevationMax) * 1; // micro
-      let n = Math.max(((n1 + n2 + n3) / 3), 0);
-      if (n < 32) n = 0;
-      return Math.max(n, 0);
-    });
+    const size = (config.terrain.worldSizeX + 1) * (config.terrain.worldSizeY + 1);
+    this.prevFluid = new Float32Array(size);
+    this.fluid = new Float32Array(size);
+    this.terrain = new Float32Array(size);
+    for (let y = 0; y <= config.terrain.worldSizeY; y++) {
+      for (let x = 0; x <= config.terrain.worldSizeX; x++) {
+        const n3 = Math.max((this.noise(x / 48, y / 48) * config.terrain.elevationMax) * 2, 0); // macro
+        const n2 = (this.noise(x / 32, y / 32) * config.terrain.elevationMax) * 1; // midlevel
+        const n1 = (this.noise(x / 16, y / 16) * config.terrain.elevationMax) * 1; // micro
+        let n = Math.max(((n1 + n2 + n3) / 3), 0);
+        if (n < 32) n = 0;
+        const index = y * (config.terrain.worldSizeX + 1) + x;
+        this.terrain[index] = n;
+      }
+    }
   }
 
   fluidChangeRequest(xCoord: number, yCoord: number, totalChange: number, pattern: number[][] = [[0, 0]]) {
@@ -50,54 +55,23 @@ export class TerrainSimulation {
     }
   }
 
-  private generateMatrix(fn: (x: number, y: number ) => number = () => 0): number[][] {
-    const elevation: number[][] = [];
-    console.time('generateVertices');
-    for (let y = 0; y <= this.config.terrain.worldSizeY; y++) {
-      const row: number[] = [];
-      for (let x = 0; x <= this.config.terrain.worldSizeX; x++) {
-        row.push(fn.call(this, x, y));
-      }
-      elevation.push(row);
-    }
-    console.timeEnd('generateVertices');
-    return elevation;
-  }
-
   tick(tickCounter: number) {
-    const {overflow, flowRate, evaporation} = this.config.fluid;
-    const {worldSizeX, worldSizeY, elevationMax} = this.config.terrain;
-    const creeper = this.fluid;
-    const prevCreeper = this.prevFluid;
+    const {flowRate, evaporation} = this.config.fluid;
+    const {worldSizeX, worldSizeY} = this.config.terrain;
+    const {terrain, fluid, prevFluid} = this;
 
-    let totalCreeper = 0;
-    for (let y = 0; y <= worldSizeY; y++) {
-      const creeperY = creeper[y];
-      const prevCreeperY = prevCreeper[y];
-      for (let x = 0; x <= worldSizeX; x++) {
-        prevCreeperY[x] = Math.max(Math.min(creeperY[x], elevationMax * overflow), 0);
-        totalCreeper += prevCreeperY[x];
-      }
-    }
-
-    if (tickCounter % 20 === 0) {
-      // console.log('total Creeper', totalCreeper.toFixed(0),'change', totalCreeper - this.prevTotalFluidDensity);
-      this.prevTotalFluidDensity = totalCreeper;
-    }
-
-    // Fluid Change requests besides regular flow (such as damage by weapons, emitters, etc.)
-    // These may potentially happen outside of the regular tick cycle
-    for (const request of this.fluidChangeRequests) {
-      creeper[request.yCoord][request.xCoord] += (request.amount);
-    }
+    for (const {xCoord, yCoord, amount} of this.fluidChangeRequests) fluid[yCoord * (worldSizeX + 1) + xCoord] += amount;
     this.fluidChangeRequests.length = 0;
+    prevFluid.set(fluid);
 
     for (let y = 0; y <= worldSizeY; y++) {
-      const prevCreeperY = prevCreeper[y];
-      const creeperY = creeper[y];
-      const terrainY = this.terrain[y];
       for (let x = 0; x <= worldSizeX; x++) {
-        if (prevCreeperY[x] <= 8) prevCreeperY[x] = Math.max(prevCreeperY[x] - evaporation, 0); // evaporate
+        const indexCenter = y * (worldSizeX + 1) + x;
+        // Evaoprate
+        const prevFluidValue = prevFluid[indexCenter];
+        if (prevFluidValue <= 8) prevFluid[indexCenter] = Math.max(prevFluidValue - evaporation, 0);
+
+        // Diffuse to non-diagonal neighbouring edges
         for (const [dx, dy] of this.flowNeighbours) {
           const newX = x + dx;
           const newY = y + dy;
@@ -110,8 +84,9 @@ export class TerrainSimulation {
           // The problem with that is that I'd have to give up transparency or need to be able to automatically adjust it for the topmost layer...
           // Maybe that won't be necessary once I switch to a proper isoband/isoline based rendering instead of tile based...
           if (newX >= 0 && newX <= worldSizeX && newY >= 0 && newY <= worldSizeY) {
-            const currentTotalElevation = prevCreeperY[x] + (Math.round(terrainY[x] / 16) * 16);
-            const neighborTotalElevation = prevCreeper[newY][newX] + (Math.round(this.terrain[newY][newX] / 16) * 16);
+            const indexNeighbour = newY * (worldSizeX + 1) + newX;
+            const currentTotalElevation = prevFluid[indexCenter] + (Math.round(terrain[indexCenter] / 16) * 16);
+            const neighborTotalElevation = prevFluid[indexNeighbour] + (Math.round(terrain[indexNeighbour] / 16) * 16);
             const elevationDiff = currentTotalElevation - neighborTotalElevation;
             // If the current tile is higher in total elevation, diffuse down to the neighbor
             // TODO prioritize flowing on same or lower level first before considering to flow up
@@ -120,9 +95,9 @@ export class TerrainSimulation {
             // Then just flow there if it is lower than center. If not break out of loop as all other will be higher
             // If it is lower and it did flow reduce the remaining density and break out of loop if it is 0
             if (elevationDiff > 0) {
-              const flowAmount = Math.min(elevationDiff, prevCreeper[y][x]) * flowRate;
-              creeperY[x] -= flowAmount;
-              creeper[newY][newX] += flowAmount;
+              const flowAmount = Math.min(elevationDiff, prevFluid[indexCenter]) * flowRate;
+              fluid[indexCenter] -= flowAmount;
+              fluid[indexNeighbour] += flowAmount;
             }
           }
         }

@@ -18,10 +18,10 @@ const defaultTerrainConfig: TerrainConfig = {
   wallColor: 0x9b938d - 0x111111,
   terrainLayers: [
     {elevation: 0, depth: 0, color: 0x544741},
-    // {elevation: 48 * 1, depth: 48 * 1, color: 0x544741 + 0x050505},
-    // {elevation: 96 * 1, depth: 96 * 1, color: 0x544741 + 0x111111},
-    // {elevation: 144 * 1, depth: 144 * 1, color: 0x544741 + 0x151515},
-    // {elevation: 192, depth: 192, color: 0x544741 + 0x222222},
+    {elevation: 48 * 1, depth: 48 * 1, color: 0x544741 + 0x050505},
+    {elevation: 96 * 1, depth: 96 * 1, color: 0x544741 + 0x111111},
+    {elevation: 144 * 1, depth: 144 * 1, color: 0x544741 + 0x151515},
+    {elevation: 192, depth: 192, color: 0x544741 + 0x222222},
     // {threshold: 240, depth: 240, color: 0x544741 + 0x252525},
   ],
   fluidLayerThresholds: [16, 32, 48, 64, 80, 96, 112, 128, 144, 160],
@@ -30,14 +30,14 @@ const defaultTerrainConfig: TerrainConfig = {
 export class Terrain {
   readonly simulation: TerrainSimulation;
   private readonly scene: Scene;
-  private readonly config: TerrainRenderConfig;
+  private readonly config: TerrainConfig;
   private readonly terrainGraphics: Map<number, GameObjects.Graphics> = new Map();
   private readonly marchingSquares: MarchingSquares;
 
   constructor(scene: GameScene, config: TerrainConfig = defaultTerrainConfig) {
     this.scene = scene;
-    const {fluid, terrain, ...renderConfig} = config;
-    this.config = renderConfig;
+    this.config = config;
+    const {fluid, terrain} = config;
     this.simulation = new TerrainSimulation({terrain, fluid});
     this.marchingSquares = new MarchingSquares({squareSize: GRID});
 
@@ -107,7 +107,7 @@ export class Terrain {
     return {coordX, coordY, numCoordsX, numCoordsY};
   }
 
-  private renderSquareAt(x: number, y: number, threshold: number, graphics: Phaser.GameObjects.Graphics, matrix: number[][] = this.simulation.fluid, offsetX = 0, offsetY = 0): void {
+  private renderSquareAt(x: number, y: number, threshold: number, graphics: Phaser.GameObjects.Graphics, matrix: Float32Array = this.simulation.fluid, offsetX = 0, offsetY = 0): void {
     const densityData = this.getTileEdges(x, y, threshold, matrix, this.simulation.terrain === matrix ? undefined : this.simulation.terrain);
     if (!densityData) return;
     const posX = x * GRID + offsetX;
@@ -126,16 +126,22 @@ export class Terrain {
     graphics.translateCanvas(-posX, -posY);
   }
 
-  private getTileEdges(x: number, y: number, threshold: number, matrix: number[][] = this.simulation.fluid, secondary?: number[][]): ISquareDensityData {
-    const creeperTL = matrix[y][x];
-    const creeperTR = matrix[y][x+1];
-    const creeperBR = matrix[y+1][x+1];
-    const creeperBL = matrix[y+1][x];
+  private getTileEdges(x: number, y: number, threshold: number, matrix: Float32Array = this.simulation.fluid, secondary?: Float32Array): ISquareDensityData {
+    const {worldSizeX} = this.config.terrain;
+    const indexTL = y * (worldSizeX + 1) + x;
+    const indexBL = indexTL + worldSizeX + 1;
+    const indexTR = indexTL + 1;
+    const indexBR = indexBL + 1;
 
-    const secondaryTL = secondary ? secondary[y][x] : 0;
-    const secondaryTR = secondary ? secondary[y][x+1] : 0;
-    const secondaryBR = secondary ? secondary[y+1][x+1] : 0;
-    const secondaryBL = secondary ? secondary[y+1][x] : 0;
+    const creeperTL = matrix[indexTL];
+    const creeperTR = matrix[indexTR];
+    const creeperBR = matrix[indexBR];
+    const creeperBL = matrix[indexBL];
+
+    const secondaryTL = secondary ? secondary[indexTL] : 0;
+    const secondaryTR = secondary ? secondary[indexTR] : 0;
+    const secondaryBR = secondary ? secondary[indexBR] : 0;
+    const secondaryBL = secondary ? secondary[indexBL] : 0;
 
     return {
       tl: creeperTL >= 1 ? creeperTL + secondaryTL : creeperTL,
