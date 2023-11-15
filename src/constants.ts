@@ -29,3 +29,6 @@ export const enum SceneKeys {
   GAME_SCENE = 'GameScene',
   GAME_UI_SCENE = 'GameUIScene'
 }
+
+export const THRESHOLD = 1024;
+export const MAX_UINT16 = 65535;

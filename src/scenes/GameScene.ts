@@ -45,12 +45,16 @@ export default class GameScene extends Phaser.Scene {
     this.network.placeUnit(this.city.coordX, this.city.coordY, this.city);
 
     const emitterManager = new EmitterManager(this);
-    emitterManager.addEmitter({xCoord: 2, yCoord: 2, fluidPerSecond: 512, ticksCooldown: 1, ticksDelay: 20 * 10});
-    emitterManager.addEmitter({xCoord: WORLD_X - 2, yCoord: 2, fluidPerSecond: 512, ticksCooldown: 4, ticksDelay: 0});
-    emitterManager.addEmitter({xCoord: 2, yCoord: WORLD_Y - 2, fluidPerSecond: 2096, ticksCooldown: 20, ticksDelay: 0});
-    emitterManager.addEmitter({xCoord: WORLD_X - 2, yCoord: WORLD_Y - 2, fluidPerSecond: 512, ticksCooldown: 1, ticksDelay: 0});
-    emitterManager.addEmitter({xCoord: WORLD_X / 2, yCoord: WORLD_Y / 2, fluidPerSecond: 5120, ticksCooldown: 1, ticksDelay: 0});
+    emitterManager.addEmitter({xCoord: 2, yCoord: 2, fluidPerSecond: 1310720, ticksCooldown: 1, ticksDelay: 0});
+    emitterManager.addEmitter({xCoord: WORLD_X - 2, yCoord: 2, fluidPerSecond: 131072, ticksCooldown: 1, ticksDelay: 0});
+    emitterManager.addEmitter({xCoord: 2, yCoord: WORLD_Y - 2, fluidPerSecond: 131072, ticksCooldown: 1, ticksDelay: 0});
+    emitterManager.addEmitter({xCoord: WORLD_X - 2, yCoord: WORLD_Y - 2, fluidPerSecond: 131072, ticksCooldown: 1, ticksDelay: 0});
+    // const id = emitterManager.addEmitter({xCoord: WORLD_X / 2, yCoord: WORLD_Y / 2, fluidPerSecond: 13107200, ticksCooldown: 1, ticksDelay: 0});
     emitterManager.onemit = (xCoord, yCoord, amount, pattern) => this.terrain.simulation.fluidChangeRequest(xCoord, yCoord, amount, pattern);
+
+    setTimeout(() => {
+      // emitterManager.removeEmitter(id);
+    }, 5000);
 
     this.tickCounter = 0;
     // Only rendering related things should happen every frame. I potentially want to be able to simulate this game on a server, so it needs to be somewhat deterministic

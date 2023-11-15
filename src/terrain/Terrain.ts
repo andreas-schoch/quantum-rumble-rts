@@ -1,5 +1,5 @@
 import { ISquareDensityData, MarchingSquares } from './MarchingSquares';
-import { GRID, WORLD_X, WORLD_Y } from '../constants';
+import { GRID, MAX_UINT16, THRESHOLD, WORLD_X, WORLD_Y } from '../constants';
 import { GameObjects, Scene } from 'phaser';
 import { TerrainSimulation, TerrainSimulationConfig } from './TerrainSimulation';
 import GameScene from '../scenes/GameScene';
@@ -8,23 +8,22 @@ const defaultTerrainConfig: TerrainConfig = {
   terrain: {
     worldSizeX: WORLD_X,
     worldSizeY: WORLD_Y,
-    elevationMax: 256,
+    elevationMax: MAX_UINT16 / 4,
   },
   fluid: {
-    overflow: 10,
+    overflow: 4,
     flowRate: 0.15,
-    evaporation: -0.025,
+    evaporation: 2,
   },
   wallColor: 0x9b938d - 0x111111,
   terrainLayers: [
-    {elevation: 0, depth: 0, color: 0x544741},
-    {elevation: 48 * 1, depth: 48 * 1, color: 0x544741 + 0x050505},
-    {elevation: 96 * 1, depth: 96 * 1, color: 0x544741 + 0x111111},
-    {elevation: 144 * 1, depth: 144 * 1, color: 0x544741 + 0x151515},
-    {elevation: 192, depth: 192, color: 0x544741 + 0x222222},
-    // {threshold: 240, depth: 240, color: 0x544741 + 0x252525},
+    // {elevation: 0, depth: 0, color: 0x544741},
+    { elevation: THRESHOLD * 3, depth: THRESHOLD * 3, color: 0x544741 + 0x050505 },
+    { elevation: THRESHOLD * 6, depth: THRESHOLD * 6, color: 0x544741 + 0x111111 },
+    { elevation: THRESHOLD * 9, depth: THRESHOLD * 9, color: 0x544741 + 0x151515 },
+    // { elevation: THRESHOLD * 12, depth: THRESHOLD * 12, color: 0x544741 + 0x222222 },
   ],
-  fluidLayerThresholds: [16, 32, 48, 64, 80, 96, 112, 128, 144, 160],
+  fluidLayerThresholds: [THRESHOLD * 1, THRESHOLD * 2, THRESHOLD * 3, THRESHOLD * 4, THRESHOLD * 5, THRESHOLD * 6, THRESHOLD * 7, THRESHOLD * 8, THRESHOLD * 9, THRESHOLD * 10],
 };
 
 export class Terrain {
@@ -37,9 +36,9 @@ export class Terrain {
   constructor(scene: GameScene, config: TerrainConfig = defaultTerrainConfig) {
     this.scene = scene;
     this.config = config;
-    const {fluid, terrain} = config;
-    this.simulation = new TerrainSimulation({terrain, fluid});
-    this.marchingSquares = new MarchingSquares({squareSize: GRID});
+    const { fluid, terrain } = config;
+    this.simulation = new TerrainSimulation({ terrain, fluid });
+    this.marchingSquares = new MarchingSquares({ squareSize: GRID });
 
     // TODO find more optimal way to display terrain. Static render textures have HORRIBLE performance when creeper graphics is underflowing it.
     // BOTTOM LAYER
@@ -48,21 +47,21 @@ export class Terrain {
     graphics.fillStyle(BASE_TERRAIN_COLOR, 1);
     graphics.fillRect(0, 0, WORLD_X * GRID, WORLD_Y * GRID);
     // ELEVATION LAYERS
-    for (const {elevation: threshold, color, depth} of defaultTerrainConfig.terrainLayers) {
+    for (const { elevation: threshold, color, depth } of defaultTerrainConfig.terrainLayers) {
       const graphics = this.scene.add.graphics().setDepth(depth).setName('terrain').setAlpha(1);
       graphics.lineStyle(2, 0x000000);
       for (let y = 0; y < WORLD_Y; y++) {
         for (let x = 0; x < WORLD_X; x++) {
           graphics.fillStyle(0x9b938d - 0x111111, 1);
-          this.renderSquareAt(x, y, threshold - 8, graphics, this.simulation.terrain, 10, 20);
-          this.renderSquareAt(x, y, threshold - 4, graphics, this.simulation.terrain, 5, 10);
+          this.renderTerrainAt(x, y, threshold - 8, graphics, 10, 20);
+          this.renderTerrainAt(x, y, threshold - 4, graphics, 5, 10);
           graphics.fillStyle(color, 1);
-          this.renderSquareAt(x, y, threshold, graphics, this.simulation.terrain, 0, 0);
+          this.renderTerrainAt(x, y, threshold, graphics, 0, 0);
         }
       }
     }
 
-    config.fluidLayerThresholds.forEach(threshold => this.terrainGraphics.set(threshold, this.scene.add.graphics().setAlpha(1).setDepth(threshold + 1).setName('g' + threshold)));
+    config.fluidLayerThresholds.forEach(threshold => this.terrainGraphics.set(threshold, this.scene.add.graphics().setAlpha(1).setDepth(threshold).setName('g' + threshold)));
   }
 
   tick(tickCounter: number) {
@@ -76,19 +75,22 @@ export class Terrain {
     for (const threshold of this.config.fluidLayerThresholds) {
       const g = this.terrainGraphics.get(threshold);
       if (!g) throw new Error('no graphics');
-      g.fillStyle(0x4081b7, 0.4);
-      g.lineStyle(2, 0x01030c, 1);
+      // g.fillStyle(0x4081b7, 0.4);
+      // g.lineStyle(2, 0x01030c, 1);
       for (let y = bounds.coordY; y <= (bounds.coordY + bounds.numCoordsY); y++) {
         for (let x = bounds.coordX; x <= bounds.coordX + bounds.numCoordsX; x++) {
           if (!this.isWithinBounds(x, y)) continue; // this can be removed if we ensure the renderQueue is always within bounds
-          this.renderSquareAt(x, y, threshold, g);
+          // const terrainElevation = this.simulation.terrain[x + y * (WORLD_X + 1)];
+          // const stepped = Math.round(terrainElevation / (THRESHOLD * 3)) * (THRESHOLD * 3);
+          // if (stepped > fluidLayerThreshold) continue;
+          this.renderFluidAt(x, y, threshold, g);
         }
       }
     }
   }
 
   private getVisibleBounds(): CoordBounds | null {
-    const {x, y, width, height} = this.scene.cameras.main.worldView;
+    const { x, y, width, height } = this.scene.cameras.main.worldView;
 
     const MAX_WIDTH = WORLD_X * GRID;
     const offsetLeftX = x < 0 ? Math.abs(x) : 0;
@@ -104,56 +106,103 @@ export class Terrain {
 
     const coordX = Phaser.Math.Clamp(Math.floor(x / GRID) - 1, 0, WORLD_X - 1);
     const coordY = Phaser.Math.Clamp(Math.floor(y / GRID) - 1, 0, WORLD_Y - 1);
-    return {coordX, coordY, numCoordsX, numCoordsY};
+    return { coordX, coordY, numCoordsX, numCoordsY };
   }
 
-  private renderSquareAt(x: number, y: number, threshold: number, graphics: Phaser.GameObjects.Graphics, matrix: Float32Array = this.simulation.fluid, offsetX = 0, offsetY = 0): void {
-    const densityData = this.getTileEdges(x, y, threshold, matrix, this.simulation.terrain === matrix ? undefined : this.simulation.terrain);
-    if (!densityData) return;
+  private renderTerrainAt(x: number, y: number, threshold: number, graphics: Phaser.GameObjects.Graphics, offsetX = 0, offsetY = 0): void {
+    const {terrain} = this.getCellEdges(x, y, threshold);
+
     const posX = x * GRID + offsetX;
     const posY = y * GRID + offsetY;
-    const {polygons, isoLines, shapeIndex} = this.marchingSquares.getSquareGeomData(densityData);
+    this.renderAt(posX, posY, terrain, graphics);
+  }
+
+  private renderFluidAt(x: number, y: number, threshold: number, graphics: Phaser.GameObjects.Graphics): void {
+    const {terrain, fluid} = this.getCellEdges(x, y, threshold);
+    graphics.fillStyle(0x4081b7, 0.4);
+    graphics.lineStyle(2, 0x01030c, 1);
+
+    const densityData = {
+      tl: fluid.tl >= THRESHOLD - 256 ? terrain.tl + fluid.tl : fluid.tl,
+      tr: fluid.tr >= THRESHOLD - 256 ? terrain.tr + fluid.tr : fluid.tr,
+      br: fluid.br >= THRESHOLD - 256 ? terrain.br + fluid.br : fluid.br,
+      bl: fluid.bl >= THRESHOLD - 256 ? terrain.bl + fluid.bl : fluid.bl,
+      threshold,
+    };
+    const posX = x * GRID;
+    const posY = y * GRID;
+    this.renderAt(posX, posY, densityData, graphics);
+  }
+
+  private renderAt(x: number, y: number, densityData: ISquareDensityData, graphics: GameObjects.Graphics): void {
+    const { polygons, isoLines, shapeIndex } = this.marchingSquares.getSquareGeomData(densityData);
 
     if (shapeIndex === 0) return; // not drawing empty square
 
-    graphics.translateCanvas(posX, posY);
+    graphics.translateCanvas(x, y);
     if (shapeIndex === 15) {
       graphics.fillRect(0, 0, GRID, GRID);
     } else {
       for (const points of polygons) graphics.fillPoints(points, true);
-      for (const {p1, p2} of isoLines) graphics.lineBetween(p1.x, p1.y, p2.x, p2.y);
+      for (const { p1, p2 } of isoLines) graphics.lineBetween(p1.x, p1.y, p2.x, p2.y);
     }
-    graphics.translateCanvas(-posX, -posY);
+    graphics.translateCanvas(-x, -y);
   }
 
-  private getTileEdges(x: number, y: number, threshold: number, matrix: Float32Array = this.simulation.fluid, secondary?: Float32Array): ISquareDensityData {
-    const {worldSizeX} = this.config.terrain;
+  // private getTileEdges(x: number, y: number, threshold: number, matrix: Uint32Array = this.simulation.fluid, secondary?: Uint32Array): ISquareDensityData {
+  //   const { worldSizeX } = this.config.terrain;
+  //   const indexTL = y * (worldSizeX + 1) + x;
+  //   const indexBL = indexTL + worldSizeX + 1;
+  //   const indexTR = indexTL + 1;
+  //   const indexBR = indexBL + 1;
+
+  //   const creeperTL = matrix[indexTL];
+  //   const creeperTR = matrix[indexTR];
+  //   const creeperBR = matrix[indexBR];
+  //   const creeperBL = matrix[indexBL];
+
+  //   const secondaryTL = secondary ? secondary[indexTL] : 0;
+  //   const secondaryTR = secondary ? secondary[indexTR] : 0;
+  //   const secondaryBR = secondary ? secondary[indexBR] : 0;
+  //   const secondaryBL = secondary ? secondary[indexBL] : 0;
+
+  //   return {
+  //     tl: creeperTL >= THRESHOLD - 256 ? creeperTL + secondaryTL : creeperTL,
+  //     tr: creeperTR >= THRESHOLD - 256 ? creeperTR + secondaryTR : creeperTR,
+  //     br: creeperBR >= THRESHOLD - 256 ? creeperBR + secondaryBR : creeperBR,
+  //     bl: creeperBL >= THRESHOLD - 256 ? creeperBL + secondaryBL : creeperBL,
+  //     // tl: creeperTL,
+  //     // tr: creeperTR,
+  //     // br: creeperBR,
+  //     // bl: creeperBL,
+  //     threshold,
+  //   };
+  // }
+
+  private getCellEdges(x: number, y: number, threshold: number): {terrain: ISquareDensityData, fluid: ISquareDensityData} {
+    const { worldSizeX } = this.config.terrain;
     const indexTL = y * (worldSizeX + 1) + x;
     const indexBL = indexTL + worldSizeX + 1;
     const indexTR = indexTL + 1;
     const indexBR = indexBL + 1;
 
-    const creeperTL = matrix[indexTL];
-    const creeperTR = matrix[indexTR];
-    const creeperBR = matrix[indexBR];
-    const creeperBL = matrix[indexBL];
-
-    const secondaryTL = secondary ? secondary[indexTL] : 0;
-    const secondaryTR = secondary ? secondary[indexTR] : 0;
-    const secondaryBR = secondary ? secondary[indexBR] : 0;
-    const secondaryBL = secondary ? secondary[indexBL] : 0;
-
-    return {
-      tl: creeperTL >= 1 ? creeperTL + secondaryTL : creeperTL,
-      tr: creeperTR >= 1 ? creeperTR + secondaryTR : creeperTR,
-      br: creeperBR >= 1 ? creeperBR + secondaryBR : creeperBR,
-      bl: creeperBL >= 1 ? creeperBL + secondaryBL : creeperBL,
-      // tl: creeperTL,
-      // tr: creeperTR,
-      // br: creeperBR,
-      // bl: creeperBL,
+    const terrain = {
+      tl: this.simulation.terrain[indexTL],
+      tr: this.simulation.terrain[indexTR],
+      br: this.simulation.terrain[indexBR],
+      bl: this.simulation.terrain[indexBL],
       threshold,
     };
+
+    const fluid = {
+      tl: this.simulation.fluid[indexTL],
+      tr: this.simulation.fluid[indexTR],
+      br: this.simulation.fluid[indexBR],
+      bl: this.simulation.fluid[indexBL],
+      threshold,
+    };
+
+    return { terrain, fluid };
   }
 
   private isWithinBounds(x: number, y: number): boolean {
@@ -163,7 +212,7 @@ export class Terrain {
 
 export interface TerrainRenderConfig {
   wallColor: number;
-  terrainLayers: {elevation: number, depth: number, color: number}[];
+  terrainLayers: { elevation: number, depth: number, color: number }[];
   fluidLayerThresholds: number[];
 }
 
