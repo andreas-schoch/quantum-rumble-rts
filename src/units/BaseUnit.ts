@@ -37,7 +37,6 @@ export abstract class BaseStructure {
   built = false;
   sprite: Phaser.GameObjects.Sprite | null = null;
   healthCurrent = 0;
-  energyStorageCurrent = 0;
   buildCost: number;
 
   pendingBuild: EnergyRequest[] = [];
@@ -95,7 +94,7 @@ export abstract class BaseStructure {
     // if (this.energyStorageCapacity) this.scene.network.energyStorageMax -= this.energyStorageCapacity;
   }
 
-  damage(amount: number) {
+  hit(amount: number) {
     this.healthCurrent = Math.max(this.healthCurrent - amount, 0);
     if (this.healthCurrent === 0) this.destroy();
   }

@@ -4,6 +4,8 @@ import GameScene from '../scenes/GameScene';
 import { GRID, WORLD_X, WORLD_Y } from '../constants';
 import { BaseStructure } from './BaseUnit';
 
+// TODO consider refactoring everything to use ECS instead of inheritance...
+// (or at least create classes like HealthComponent, EnergyComponent, WeaponComponent etc. that can be added to units that need them)
 export class BaseWeaponStructure extends BaseStructure {
   static unitName = 'Weapon';
   static buildCost = 5;
@@ -14,16 +16,19 @@ export class BaseWeaponStructure extends BaseStructure {
   static energyProduction = 0;
   static energyStorageCapacity = 0;
   static healthMax = 100;
+  static damage = 128;
 
   ammoCost = 0.25;
   updatePriority = 1;
-
   ammoMax = 10;
   ammoCurrent = 0;
   lastAttack: number;
   private attackRange = 5;
   private attackCooldown = 5; // num ticks for now
   private graphics: Phaser.GameObjects.Graphics;
+  // center cell and direct neighbors
+  private damagePattern: number[][] = [[0, 0], [1, 0], [1, 1], [0, 1]];
+  // private damagePattern: number[][] = [[0, 0], [1, 0], [1, 1], [0, 1], [0, -1], [1, -1], [2, 0], [2, 1], [0, 2], [1, 2], [-1, 0], [-1, 1]];
 
   pendingAmmo: EnergyRequest[] = [];
 
@@ -75,7 +80,7 @@ export class BaseWeaponStructure extends BaseStructure {
     this.lastAttack = tickCounter;
     this.draw();
     BaseWeaponStructure.attackSFX.play();
-    this.scene.terrain.damage(this.coordX, this.coordY, 20);
+    this.scene.terrain.simulation.fluidChangeRequest(this.coordX, this.coordY, -BaseWeaponStructure.damage, this.damagePattern);
   }
 
   protected getNearestTarget(): Cell | null {

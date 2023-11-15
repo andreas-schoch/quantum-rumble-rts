@@ -4,6 +4,7 @@ import { City } from '../units/City';
 import { Network } from '../Network';
 import { BaseStructure } from '../units/BaseUnit';
 import { Terrain as Terrain } from '../terrain/Terrain';
+import { EmitterManager } from '../Emitter';
 
 type CameraRotations = '0' | '90' | '180' | '270';
 export default class GameScene extends Phaser.Scene {
@@ -30,7 +31,7 @@ export default class GameScene extends Phaser.Scene {
     this.terrain = new Terrain(this);
     this.sfx_start_collect = this.sound.add('start_collect', {detune: 600, rate: 1.25, volume: 0.5 , loop: false});
     this.sfx_place_structure = this.sound.add('place_structure', {detune: 200, rate: 1.25, volume: 1 , loop: false});
-    this.add.tileSprite(0, 0, GRID * WORLD_X,GRID * WORLD_Y, 'cell_white').setOrigin(0, 0).setDepth(10000).setAlpha(0.2);
+    this.add.tileSprite(0, 0, GRID * WORLD_X,GRID * WORLD_Y, 'cell_white').setOrigin(0, 0).setDepth(-1).setAlpha(0.2);
 
     this.scene.launch(SceneKeys.GAME_UI_SCENE, [this, () => {
       this.scene.restart();
@@ -43,10 +44,13 @@ export default class GameScene extends Phaser.Scene {
     this.city = new City(this, Math.floor(WORLD_X / 2), Math.floor(WORLD_Y / 2));
     this.network.placeUnit(this.city.coordX, this.city.coordY, this.city);
 
-    this.terrain.addEmitter(2, 2, 512);
-    this.terrain.addEmitter(WORLD_X - 2, 2, 512);
-    this.terrain.addEmitter(2, WORLD_Y - 2, 512);
-    this.terrain.addEmitter(WORLD_X - 2, WORLD_Y - 2, 512);
+    const emitterManager = new EmitterManager(this);
+    emitterManager.addEmitter({xCoord: 2, yCoord: 2, fluidPerSecond: 512, ticksCooldown: 1, ticksDelay: 20 * 10});
+    emitterManager.addEmitter({xCoord: WORLD_X - 2, yCoord: 2, fluidPerSecond: 512, ticksCooldown: 4, ticksDelay: 0});
+    emitterManager.addEmitter({xCoord: 2, yCoord: WORLD_Y - 2, fluidPerSecond: 2096, ticksCooldown: 20, ticksDelay: 0});
+    emitterManager.addEmitter({xCoord: WORLD_X - 2, yCoord: WORLD_Y - 2, fluidPerSecond: 512, ticksCooldown: 1, ticksDelay: 0});
+    emitterManager.addEmitter({xCoord: WORLD_X / 2, yCoord: WORLD_Y / 2, fluidPerSecond: 5120, ticksCooldown: 1, ticksDelay: 0});
+    emitterManager.onemit = (xCoord, yCoord, amount, pattern) => this.terrain.simulation.fluidChangeRequest(xCoord, yCoord, amount, pattern);
 
     this.tickCounter = 0;
     // Only rendering related things should happen every frame. I potentially want to be able to simulate this game on a server, so it needs to be somewhat deterministic
@@ -55,9 +59,10 @@ export default class GameScene extends Phaser.Scene {
       timeScale: 1,
       callback: () => {
         this.tickCounter++;
-        console.time('tick');
+        // console.time('tick');
+        emitterManager.tick(this.tickCounter);
         this.terrain.tick(this.tickCounter);
-        console.timeEnd('tick');
+        // console.timeEnd('tick');
         this.network.tick(this.tickCounter);
         for(const structure of BaseStructure.structuresInUpdatePriorityOrder) structure.tick(this.tickCounter);
       },

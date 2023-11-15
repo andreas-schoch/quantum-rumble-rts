@@ -23,11 +23,11 @@ export class Network {
   collectionSpriteSet: Set<Phaser.GameObjects.Sprite> = new Set();
 
   // State
-  speed = 100; // how many pixels energy balls travel per second
+  speed = 150; // how many pixels energy balls travel per second
   energyProducing = 0;
   energyCollecting = 0;
   energyStorageMax = 0;
-  energyStorageCurrent = 0;
+  energyStorageCurrent = City.energyStorageCapacity; // start full TODO refactor
 
   previewEdgeSprite: Phaser.GameObjects.Sprite;
   previewUnitSprite: Phaser.GameObjects.Sprite;
@@ -142,7 +142,7 @@ export class Network {
         arr[0].push(structure);
         if (arr[0].length === 1) {
           // TODO use marching squares to draw the collecting area. Draw each elevation separately
-          arr[1] = this.scene.add.sprite(x * GRID, y * GRID, 'cell_green').setDepth(5000).setOrigin(0, 0).setAlpha(0.2);
+          arr[1] = this.scene.add.sprite(x * GRID, y * GRID, 'cell_green').setDepth(500).setOrigin(0, 0).setAlpha(0.4);
           this.collectionSpriteSet.add(arr[1]);
         }
         this.collectionMap.set(key, arr);
@@ -265,7 +265,7 @@ export class Network {
 
     const ref = this.world[vert.data.coordY][vert.data.coordX].ref;
     if (ref) {
-      ref.damage(ref.CLASS.healthMax);
+      ref.hit(ref.CLASS.healthMax);
       this.world[vert.data.coordY][vert.data.coordX].ref = null;
     }
     this.graph.removeVertex(id);

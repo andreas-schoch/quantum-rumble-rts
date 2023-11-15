@@ -21,7 +21,8 @@ export class TerrainSimulation {
   private readonly config: TerrainSimulationConfig;
   private readonly prevFluid: number[][];
   private readonly flowNeighbours = [[1, 0], [-1, 0], [0, 1], [0, -1]];
-  private readonly pendingSingleEmits: {xCoord: number, yCoord: number, amount: number}[] = [];
+  private readonly cellEdges = [[0, 0], [1, 0], [1, 1], [0, 1]]; // marching squares works on edges, while the rest of the game works on cells (consisting of 4 edges each)
+  private readonly fluidChangeRequests: {xCoord: number, yCoord: number, amount: number}[] = [];
   private readonly noise: NoiseFunction2D = createNoise2D();
 
   constructor(config: TerrainSimulationConfig) {
@@ -38,14 +39,13 @@ export class TerrainSimulation {
     });
   }
 
-  emit(xCoord: number, yCoord: number, amount: number) {
-    this.pendingSingleEmits.push({xCoord, yCoord, amount});
-  }
-
-  damage(xCoord: number, yCoord: number, damage: number) {
-    for (let y = Math.max(0, yCoord - 2); y <= Math.min(this.config.terrain.worldSizeY, yCoord + 2); y++) {
-      for (let x = Math.max(0, xCoord - 2); x <= Math.min(this.config.terrain.worldSizeX, xCoord + 2); x++) {
-        this.fluid[y][x] = Math.max(this.fluid[y][x] - damage, 0);
+  fluidChangeRequest(xCoord: number, yCoord: number, totalChange: number, pattern: number[][] = [[0, 0]]) {
+    // remember there are always 4 edges per cell and rest of game works exclusively with cells
+    // so when xCoord and yCoord are 0,0 we need to change the fluid at 4 edges (0,0), (1,0), (1,1), (0,1)
+    const change = totalChange / (pattern.length * 4);
+    for (const [patternX, patternY] of pattern) {
+      for (const [cellX, cellY] of this.cellEdges) {
+        this.fluidChangeRequests.push({xCoord: xCoord + patternX + cellX, yCoord: yCoord + patternY + cellY, amount: change});
       }
     }
   }
@@ -64,7 +64,7 @@ export class TerrainSimulation {
     return elevation;
   }
 
-  public diffuse(tickCounter: number) {
+  tick(tickCounter: number) {
     const {overflow, flowRate, evaporation} = this.config.fluid;
     const {worldSizeX, worldSizeY, elevationMax} = this.config.terrain;
     const creeper = this.fluid;
@@ -81,13 +81,16 @@ export class TerrainSimulation {
     }
 
     if (tickCounter % 20 === 0) {
-      console.log('total Creeper', totalCreeper.toFixed(0),'change', totalCreeper - this.prevTotalFluidDensity);
+      // console.log('total Creeper', totalCreeper.toFixed(0),'change', totalCreeper - this.prevTotalFluidDensity);
       this.prevTotalFluidDensity = totalCreeper;
     }
 
-    // EMIT
-    for (const emit of this.pendingSingleEmits) creeper[emit.yCoord][emit.xCoord] += (emit.amount);
-    this.pendingSingleEmits.length = 0;
+    // Fluid Change requests besides regular flow (such as damage by weapons, emitters, etc.)
+    // These may potentially happen outside of the regular tick cycle
+    for (const request of this.fluidChangeRequests) {
+      creeper[request.yCoord][request.xCoord] += (request.amount);
+    }
+    this.fluidChangeRequests.length = 0;
 
     for (let y = 0; y <= worldSizeY; y++) {
       const prevCreeperY = prevCreeper[y];
@@ -111,6 +114,11 @@ export class TerrainSimulation {
             const neighborTotalElevation = prevCreeper[newY][newX] + (Math.round(this.terrain[newY][newX] / 16) * 16);
             const elevationDiff = currentTotalElevation - neighborTotalElevation;
             // If the current tile is higher in total elevation, diffuse down to the neighbor
+            // TODO prioritize flowing on same or lower level first before considering to flow up
+            // Maybe get the total fluid density available that can flow at the start
+            // Then call a method to give you the neighbours with the lowest total density first
+            // Then just flow there if it is lower than center. If not break out of loop as all other will be higher
+            // If it is lower and it did flow reduce the remaining density and break out of loop if it is 0
             if (elevationDiff > 0) {
               const flowAmount = Math.min(elevationDiff, prevCreeper[y][x]) * flowRate;
               creeperY[x] -= flowAmount;

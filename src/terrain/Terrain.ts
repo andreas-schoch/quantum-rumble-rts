@@ -1,7 +1,6 @@
 import { ISquareDensityData, MarchingSquares } from './MarchingSquares';
-import { GRID, TICK_DELTA, WORLD_X, WORLD_Y } from '../constants';
+import { GRID, WORLD_X, WORLD_Y } from '../constants';
 import { GameObjects, Scene } from 'phaser';
-import { Emitter } from '../types/types';
 import { TerrainSimulation, TerrainSimulationConfig } from './TerrainSimulation';
 import GameScene from '../scenes/GameScene';
 
@@ -19,20 +18,19 @@ const defaultTerrainConfig: TerrainConfig = {
   wallColor: 0x9b938d - 0x111111,
   terrainLayers: [
     {elevation: 0, depth: 0, color: 0x544741},
-    {elevation: 48 * 1, depth: 48 * 1, color: 0x544741 + 0x050505},
-    {elevation: 96 * 1, depth: 96 * 1, color: 0x544741 + 0x111111},
-    {elevation: 144 * 1, depth: 144 * 1, color: 0x544741 + 0x151515},
-    {elevation: 192, depth: 192, color: 0x544741 + 0x222222},
+    // {elevation: 48 * 1, depth: 48 * 1, color: 0x544741 + 0x050505},
+    // {elevation: 96 * 1, depth: 96 * 1, color: 0x544741 + 0x111111},
+    // {elevation: 144 * 1, depth: 144 * 1, color: 0x544741 + 0x151515},
+    // {elevation: 192, depth: 192, color: 0x544741 + 0x222222},
     // {threshold: 240, depth: 240, color: 0x544741 + 0x252525},
   ],
   fluidLayerThresholds: [16, 32, 48, 64, 80, 96, 112, 128, 144, 160],
 };
 
 export class Terrain {
-  private readonly simulation: TerrainSimulation;
+  readonly simulation: TerrainSimulation;
   private readonly scene: Scene;
   private readonly config: TerrainRenderConfig;
-  private readonly emitters: Emitter[] = []; // TODO make this a class
   private readonly terrainGraphics: Map<number, GameObjects.Graphics> = new Map();
   private readonly marchingSquares: MarchingSquares;
 
@@ -67,27 +65,10 @@ export class Terrain {
     config.fluidLayerThresholds.forEach(threshold => this.terrainGraphics.set(threshold, this.scene.add.graphics().setAlpha(1).setDepth(threshold + 1).setName('g' + threshold)));
   }
 
-  addEmitter(xCoord: number, yCoord: number, creeperPerSecond: number) {
-    const emitter = { xCoord, yCoord, creeperPerSecond, id: Math.random().toString(36).substring(2, 10) };
-    this.emitters.push(emitter);
-    this.scene.add.sprite(xCoord * GRID, yCoord * GRID, 'creeperEmitter').setDepth(100000000);
-    return emitter.id;
-  }
-
-  removeEmitter(id: string) {
-    const index = this.emitters.findIndex((e) => e.id === id);
-    if (index !== -1) this.emitters.splice(index, 1);
-    return index !== -1;
-  }
-
-  damage(xCoord: number, yCoord: number, damage: number) {
-    this.simulation.damage(xCoord, yCoord, damage);
-    // TODO add particle effects here?
-  }
-
   tick(tickCounter: number) {
-    this.emitters.forEach((emitter) => this.simulation.emit(emitter.xCoord, emitter.yCoord, emitter.creeperPerSecond * TICK_DELTA));
-    this.simulation.diffuse(tickCounter);
+    console.time('terrain simulation tick');
+    this.simulation.tick(tickCounter);
+    console.timeEnd('terrain simulation tick');
     const bounds = this.getVisibleBounds();
     if (!bounds) return;
 
@@ -188,3 +169,12 @@ export interface CoordBounds {
   numCoordsX: number;
   numCoordsY: number;
 }
+
+// TODO IDEA - assign 3 fluid layers for each terrain layer and don't allow them to flow anywhere but within their threshold
+//  Meaning that the fluid will not flow UNDER the terrain and there won't be a need to have different z-levels for terrain making it possible
+//  for the terrain to be a single big texture or bunch of smaller textures on the same z-level
+//  While no fluid level can flow where there is more terrain elevation than it's max, it can flow where it is lower, so visually it wont look too different from now.
+//  The one problem with having terrain be a single layer, is with units that are placed "behind" that should look like they are behind.
+//  Maybe the fix to that is to either keep the z-index or create a second layer only for the parts of the terrain that may be in front of units (1-2 cells of the relevant shapes)
+
+//  The problem now is that fluid is flowing below terrain. This is bad for performance but also palin wrong.

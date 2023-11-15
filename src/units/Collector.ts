@@ -4,7 +4,7 @@ import { BaseStructure } from './BaseUnit';
 
 export class Collector extends BaseStructure {
   static unitName = 'Collector';
-  static buildCost = 10;
+  static buildCost = 5;
   static isRelay = true;
   static movable = false;
   static connectionRange = 5;
