@@ -9,7 +9,7 @@ export class City extends BaseStructure {
   static movable = true;
   static isRelay = true;
   static energyCollectionRange = 4;
-  static energyProduction = 0.8;
+  static energyProduction = 20;
   static energyStorageCapacity = 100;
   static healthMax = 500;
 

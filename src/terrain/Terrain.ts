@@ -1,5 +1,5 @@
 import { ISquareDensityData, MarchingSquares } from './MarchingSquares';
-import { GRID, MAX_UINT16, THRESHOLD, WORLD_X, WORLD_Y } from '../constants';
+import { GRID, THRESHOLD, WORLD_X, WORLD_Y } from '../constants';
 import { GameObjects, Scene } from 'phaser';
 import { TerrainSimulation, TerrainSimulationConfig } from './TerrainSimulation';
 import GameScene from '../scenes/GameScene';
@@ -8,7 +8,7 @@ const defaultTerrainConfig: TerrainConfig = {
   terrain: {
     worldSizeX: WORLD_X,
     worldSizeY: WORLD_Y,
-    elevationMax: MAX_UINT16 / 4,
+    elevationMax: THRESHOLD * 12,
   },
   fluid: {
     overflow: 4,
@@ -23,7 +23,7 @@ const defaultTerrainConfig: TerrainConfig = {
     { elevation: THRESHOLD * 9, depth: THRESHOLD * 9, color: 0x544741 + 0x151515 },
     // { elevation: THRESHOLD * 12, depth: THRESHOLD * 12, color: 0x544741 + 0x222222 },
   ],
-  fluidLayerThresholds: [THRESHOLD * 1, THRESHOLD * 2, THRESHOLD * 3, THRESHOLD * 4, THRESHOLD * 5, THRESHOLD * 6, THRESHOLD * 7, THRESHOLD * 8, THRESHOLD * 9, THRESHOLD * 10],
+  fluidLayerThresholds: [THRESHOLD * 1, THRESHOLD * 2, THRESHOLD * 3, THRESHOLD * 4, THRESHOLD * 5, THRESHOLD * 6, THRESHOLD * 7, THRESHOLD * 8, THRESHOLD * 9, THRESHOLD * 10, THRESHOLD * 11, THRESHOLD * 12],
 };
 
 export class Terrain {
@@ -47,8 +47,8 @@ export class Terrain {
     graphics.fillStyle(BASE_TERRAIN_COLOR, 1);
     graphics.fillRect(0, 0, WORLD_X * GRID, WORLD_Y * GRID);
     // ELEVATION LAYERS
-    for (const { elevation: threshold, color, depth } of defaultTerrainConfig.terrainLayers) {
-      const graphics = this.scene.add.graphics().setDepth(depth).setName('terrain').setAlpha(1);
+    for (const { elevation: threshold, color} of defaultTerrainConfig.terrainLayers) {
+      const graphics = this.scene.add.graphics().setDepth(threshold).setName('terrain').setAlpha(1);
       graphics.lineStyle(2, 0x000000);
       for (let y = 0; y < WORLD_Y; y++) {
         for (let x = 0; x < WORLD_X; x++) {
@@ -67,7 +67,6 @@ export class Terrain {
   tick(tickCounter: number) {
     console.time('terrain simulation tick');
     this.simulation.tick(tickCounter);
-    console.timeEnd('terrain simulation tick');
     const bounds = this.getVisibleBounds();
     if (!bounds) return;
 
@@ -87,6 +86,7 @@ export class Terrain {
         }
       }
     }
+    console.timeEnd('terrain simulation tick');
   }
 
   private getVisibleBounds(): CoordBounds | null {
@@ -148,36 +148,6 @@ export class Terrain {
     }
     graphics.translateCanvas(-x, -y);
   }
-
-  // private getTileEdges(x: number, y: number, threshold: number, matrix: Uint32Array = this.simulation.fluid, secondary?: Uint32Array): ISquareDensityData {
-  //   const { worldSizeX } = this.config.terrain;
-  //   const indexTL = y * (worldSizeX + 1) + x;
-  //   const indexBL = indexTL + worldSizeX + 1;
-  //   const indexTR = indexTL + 1;
-  //   const indexBR = indexBL + 1;
-
-  //   const creeperTL = matrix[indexTL];
-  //   const creeperTR = matrix[indexTR];
-  //   const creeperBR = matrix[indexBR];
-  //   const creeperBL = matrix[indexBL];
-
-  //   const secondaryTL = secondary ? secondary[indexTL] : 0;
-  //   const secondaryTR = secondary ? secondary[indexTR] : 0;
-  //   const secondaryBR = secondary ? secondary[indexBR] : 0;
-  //   const secondaryBL = secondary ? secondary[indexBL] : 0;
-
-  //   return {
-  //     tl: creeperTL >= THRESHOLD - 256 ? creeperTL + secondaryTL : creeperTL,
-  //     tr: creeperTR >= THRESHOLD - 256 ? creeperTR + secondaryTR : creeperTR,
-  //     br: creeperBR >= THRESHOLD - 256 ? creeperBR + secondaryBR : creeperBR,
-  //     bl: creeperBL >= THRESHOLD - 256 ? creeperBL + secondaryBL : creeperBL,
-  //     // tl: creeperTL,
-  //     // tr: creeperTR,
-  //     // br: creeperBR,
-  //     // bl: creeperBL,
-  //     threshold,
-  //   };
-  // }
 
   private getCellEdges(x: number, y: number, threshold: number): {terrain: ISquareDensityData, fluid: ISquareDensityData} {
     const { worldSizeX } = this.config.terrain;

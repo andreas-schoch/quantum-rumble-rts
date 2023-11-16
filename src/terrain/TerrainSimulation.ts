@@ -1,5 +1,5 @@
 import { NoiseFunction2D, createNoise2D } from 'simplex-noise';
-import { THRESHOLD } from '../constants';
+import { MAX_UINT16, THRESHOLD } from '../constants';
 
 export interface TerrainSimulationConfig {
   terrain: {
@@ -39,6 +39,7 @@ export class TerrainSimulation {
         let n = Math.max(((n1 + n2 + n3) / 3), 0);
         if (n < THRESHOLD * 2) n = 0;
         const index = y * (config.terrain.worldSizeX + 1) + x;
+        // this.terrain[index] = Math.min(Math.floor(n / THRESHOLD) * THRESHOLD, MAX_UINT16);
         this.terrain[index] = n;
       }
     }
@@ -55,12 +56,16 @@ export class TerrainSimulation {
     }
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   tick(tickCounter: number) {
-    const {flowRate, evaporation} = this.config.fluid;
+    const {flowRate} = this.config.fluid;
     const {worldSizeX, worldSizeY} = this.config.terrain;
     const {terrain, fluid, prevFluid} = this;
 
-    for (const {xCoord, yCoord, amount} of this.fluidChangeRequests) fluid[yCoord * (worldSizeX + 1) + xCoord] += amount;
+    for (const {xCoord, yCoord, amount} of this.fluidChangeRequests) {
+      const index = yCoord * (worldSizeX + 1) + xCoord;
+      fluid[index] =  Math.max(Math.min(fluid[index] +  amount, MAX_UINT16), 0);
+    }
     this.fluidChangeRequests.length = 0;
     prevFluid.set(fluid);
 
@@ -69,7 +74,7 @@ export class TerrainSimulation {
         const indexCenter = y * (worldSizeX + 1) + x;
         // Evaoprate
         const prevFluidValue = prevFluid[indexCenter];
-        // if (prevFluidValue <= 500) fluid[indexCenter] = Math.max(prevFluidValue - evaporation, 0);
+        // if (prevFluidValue < THRESHOLD / 2) fluid[indexCenter] = Math.max(prevFluidValue - evaporation, 0);
 
         if (prevFluidValue < THRESHOLD / 2) continue;
         // Diffuse to non-diagonal neighbouring edges
@@ -95,8 +100,8 @@ export class TerrainSimulation {
             // Then call a method to give you the neighbours with the lowest total density first
             // Then just flow there if it is lower than center. If not break out of loop as all other will be higher
             // If it is lower and it did flow reduce the remaining density and break out of loop if it is 0
-            if ((elevationDiff * flowRate) >= 1) {
-              const flowAmount = Math.round(Math.min(elevationDiff, prevFluid[indexCenter]) * flowRate);
+            const flowAmount = Math.floor(Math.min(elevationDiff, prevFluid[indexCenter]) * flowRate);
+            if (flowAmount >= 1) {
               fluid[indexCenter] -= flowAmount;
               fluid[indexNeighbour] += flowAmount;
             }

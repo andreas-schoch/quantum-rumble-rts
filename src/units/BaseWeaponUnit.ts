@@ -16,7 +16,7 @@ export class BaseWeaponStructure extends BaseStructure {
   static energyProduction = 0;
   static energyStorageCapacity = 0;
   static healthMax = 100;
-  static damage = 128;
+  static damage = 8192;
 
   ammoCost = 0.25;
   updatePriority = 1;

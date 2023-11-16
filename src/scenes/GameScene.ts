@@ -45,11 +45,11 @@ export default class GameScene extends Phaser.Scene {
     this.network.placeUnit(this.city.coordX, this.city.coordY, this.city);
 
     const emitterManager = new EmitterManager(this);
-    emitterManager.addEmitter({xCoord: 2, yCoord: 2, fluidPerSecond: 1310720, ticksCooldown: 1, ticksDelay: 0});
-    emitterManager.addEmitter({xCoord: WORLD_X - 2, yCoord: 2, fluidPerSecond: 131072, ticksCooldown: 1, ticksDelay: 0});
-    emitterManager.addEmitter({xCoord: 2, yCoord: WORLD_Y - 2, fluidPerSecond: 131072, ticksCooldown: 1, ticksDelay: 0});
-    emitterManager.addEmitter({xCoord: WORLD_X - 2, yCoord: WORLD_Y - 2, fluidPerSecond: 131072, ticksCooldown: 1, ticksDelay: 0});
-    // const id = emitterManager.addEmitter({xCoord: WORLD_X / 2, yCoord: WORLD_Y / 2, fluidPerSecond: 13107200, ticksCooldown: 1, ticksDelay: 0});
+    emitterManager.addEmitter({xCoord: 2, yCoord: 2, fluidPerSecond: 32768, ticksCooldown: 1, ticksDelay: 0});
+    emitterManager.addEmitter({xCoord: WORLD_X - 2, yCoord: 2, fluidPerSecond: 32768, ticksCooldown: 1, ticksDelay: 0});
+    emitterManager.addEmitter({xCoord: 2, yCoord: WORLD_Y - 2, fluidPerSecond: 32768, ticksCooldown: 1, ticksDelay: 0});
+    emitterManager.addEmitter({xCoord: WORLD_X - 2, yCoord: WORLD_Y - 2, fluidPerSecond: 32768, ticksCooldown: 1, ticksDelay: 0});
+    // const id = emitterManager.addEmitter({xCoord: WORLD_X / 2, yCoord: WORLD_Y / 2, fluidPerSecond: 3276800, ticksCooldown: 1, ticksDelay: 0});
     emitterManager.onemit = (xCoord, yCoord, amount, pattern) => this.terrain.simulation.fluidChangeRequest(xCoord, yCoord, amount, pattern);
 
     setTimeout(() => {
