@@ -34,7 +34,7 @@ export class TerrainSimulation {
     for (let y = 0; y <= config.terrain.worldSizeY; y++) {
       for (let x = 0; x <= config.terrain.worldSizeX; x++) {
         const n3 = Math.max((this.noise(x / 48, y / 48) * config.terrain.elevationMax) * 2, 0); // macro
-        const n2 = (this.noise(x / 32, y / 32) * config.terrain.elevationMax) * 1; // midlevel
+        const n2 = (this.noise(x / 32, y / 32) * config.terrain.elevationMax) * 2; // midlevel
         const n1 = (this.noise(x / 16, y / 16) * config.terrain.elevationMax) * 1; // micro
         let n = Math.max(((n1 + n2 + n3) / 3), 0);
         if (n < THRESHOLD * 2) n = 0;

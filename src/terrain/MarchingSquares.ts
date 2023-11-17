@@ -147,7 +147,7 @@ export class MarchingSquares {
     return `${tl}-${tr}-${br}-${bl}`;
   }
 
-  private getShapeIndex(data: ISquareDensityData): number {
+  getShapeIndex(data: ISquareDensityData): number {
     const {tl, tr, br, bl, threshold} = data;
     const val1 = tl >= threshold ? 8 : 0;
     const val2 = tr >= threshold ? 4 : 0;

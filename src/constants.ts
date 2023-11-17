@@ -10,7 +10,6 @@ export const EVENT_UNIT_SELECTION_CHANGE = 'unit_selection_change';
 export const SETTINGS_KEY_RESOLUTION = 'quantum_rumble_resolution';
 export const DEFAULT_WIDTH = 1920;
 export const DEFAULT_HEIGHT = 1080;
-// export const RESOLUTION_SCALE: number = Number(localStorage?.getItem(SETTINGS_KEY_RESOLUTION) || 0.5);
 export const RESOLUTION_SCALE: number =  0.5;
 export const DEFAULT_ZOOM: number = 1;
 export const MAX_ZOOM: number = 2.5 * RESOLUTION_SCALE;
@@ -19,8 +18,8 @@ export const DEBUG = true;
 
 export const GRID = 40;
 export const HALF_GRID = GRID / 2;
-export const WORLD_X = 64;
-export const WORLD_Y = 64;
+export const WORLD_X = 128;
+export const WORLD_Y = 128;
 export const TICK_RATE = 50; // ms
 export const TICK_DELTA = TICK_RATE / 1000; // it's easier to change tickrate when things are scaled to a second
 
@@ -30,5 +29,7 @@ export const enum SceneKeys {
   GAME_UI_SCENE = 'GameUIScene'
 }
 
+// The "precision" for each fluid layer depends on the threshold value. The higher it is the smoother the interpolation and flow.
+// Even when no-interpolation is desired (for marching squares), the threshold is important to allow gradual flow of fluid between cells.
 export const THRESHOLD = 1024;
 export const MAX_UINT16 = 65535;

@@ -17,11 +17,10 @@ const defaultTerrainConfig: TerrainConfig = {
   },
   wallColor: 0x9b938d - 0x111111,
   terrainLayers: [
-    // {elevation: 0, depth: 0, color: 0x544741},
-    { elevation: THRESHOLD * 3, depth: THRESHOLD * 3, color: 0x544741 + 0x050505 },
-    { elevation: THRESHOLD * 6, depth: THRESHOLD * 6, color: 0x544741 + 0x111111 },
-    { elevation: THRESHOLD * 9, depth: THRESHOLD * 9, color: 0x544741 + 0x151515 },
-    // { elevation: THRESHOLD * 12, depth: THRESHOLD * 12, color: 0x544741 + 0x222222 },
+    { elevation: THRESHOLD * 3, depth: THRESHOLD * 3, color: 0x544741 + 0x111111 },
+    { elevation: THRESHOLD * 6, depth: THRESHOLD * 6, color: 0x544741 + 0x222222 },
+    { elevation: THRESHOLD * 9, depth: THRESHOLD * 8, color: 0x544741 + 0x333333 },
+    { elevation: THRESHOLD * 12, depth: THRESHOLD * 12, color: 0x544741 + 0x444444 }, // Ensure last layers threshold equals config.terrain.elevationMax to prevent holes
   ],
   fluidLayerThresholds: [THRESHOLD * 1, THRESHOLD * 2, THRESHOLD * 3, THRESHOLD * 4, THRESHOLD * 5, THRESHOLD * 6, THRESHOLD * 7, THRESHOLD * 8, THRESHOLD * 9, THRESHOLD * 10, THRESHOLD * 11, THRESHOLD * 12],
 };
@@ -47,8 +46,8 @@ export class Terrain {
     graphics.fillStyle(BASE_TERRAIN_COLOR, 1);
     graphics.fillRect(0, 0, WORLD_X * GRID, WORLD_Y * GRID);
     // ELEVATION LAYERS
-    for (const { elevation: threshold, color} of defaultTerrainConfig.terrainLayers) {
-      const graphics = this.scene.add.graphics().setDepth(threshold).setName('terrain').setAlpha(1);
+    for (const { elevation: threshold, color, depth} of defaultTerrainConfig.terrainLayers) {
+      const graphics = this.scene.add.graphics().setDepth(depth).setName('terrain').setAlpha(1);
       graphics.lineStyle(2, 0x000000);
       for (let y = 0; y < WORLD_Y; y++) {
         for (let x = 0; x < WORLD_X; x++) {
@@ -74,8 +73,6 @@ export class Terrain {
     for (const threshold of this.config.fluidLayerThresholds) {
       const g = this.terrainGraphics.get(threshold);
       if (!g) throw new Error('no graphics');
-      // g.fillStyle(0x4081b7, 0.4);
-      // g.lineStyle(2, 0x01030c, 1);
       for (let y = bounds.coordY; y <= (bounds.coordY + bounds.numCoordsY); y++) {
         for (let x = bounds.coordX; x <= bounds.coordX + bounds.numCoordsX; x++) {
           if (!this.isWithinBounds(x, y)) continue; // this can be removed if we ensure the renderQueue is always within bounds
@@ -110,16 +107,20 @@ export class Terrain {
   }
 
   private renderTerrainAt(x: number, y: number, threshold: number, graphics: Phaser.GameObjects.Graphics, offsetX = 0, offsetY = 0): void {
-    const {terrain} = this.getCellEdges(x, y, threshold);
+    const edgeDataAbove = this.getCellEdges(x, y, threshold + (THRESHOLD * 3));
+
+    const shapeIndexAbove = this.marchingSquares.getShapeIndex(edgeDataAbove.terrain);
+    if (shapeIndexAbove === 15) return; // prevent drawing invisible terrain
 
     const posX = x * GRID + offsetX;
     const posY = y * GRID + offsetY;
-    this.renderAt(posX, posY, terrain, graphics);
+    const edgeData = this.getCellEdges(x, y, threshold);
+    this.renderAt(posX, posY, edgeData.terrain, graphics);
   }
 
   private renderFluidAt(x: number, y: number, threshold: number, graphics: Phaser.GameObjects.Graphics): void {
     const {terrain, fluid} = this.getCellEdges(x, y, threshold);
-    graphics.fillStyle(0x4081b7, 0.4);
+    graphics.fillStyle(0x4081b7, 0.6);
     graphics.lineStyle(2, 0x01030c, 1);
 
     const densityData = {
