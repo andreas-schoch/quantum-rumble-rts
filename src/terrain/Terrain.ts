@@ -11,40 +11,18 @@ const defaultTerrainConfig: TerrainConfig = {
     elevationMax: THRESHOLD * 12,
   },
   fluid: {
-    overflow: THRESHOLD * 12,
+    overflow: 4,
     flowRate: 0.15,
-    evaporation: 0,
+    evaporation: 2,
   },
   wallColor: 0x9b938d - 0x111111,
   terrainLayers: [
-    // { elevation: THRESHOLD * 0, depth: 0, color: 0x544741 }, // this would be the lowest layer. It's rendered differently than the rest since it's a single rectangle
-    { elevation: THRESHOLD * 3, depth: 4, color: 0x544741 + 0x111111 },
-    { elevation: THRESHOLD * 6, depth: 7, color: 0x544741 + 0x222222 },
-    { elevation: THRESHOLD * 9, depth: 10, color: 0x544741 + 0x333333 },
-    { elevation: THRESHOLD * 12, depth: 13, color: 0x544741 + 0x444444 }, // Ensure last layers threshold equals config.terrain.elevationMax to prevent holes
+    { elevation: THRESHOLD * 3, depth: THRESHOLD * 3, color: 0x544741 + 0x111111 },
+    { elevation: THRESHOLD * 6, depth: THRESHOLD * 6, color: 0x544741 + 0x222222 },
+    { elevation: THRESHOLD * 9, depth: THRESHOLD * 8, color: 0x544741 + 0x333333 },
+    { elevation: THRESHOLD * 12, depth: THRESHOLD * 12, color: 0x544741 + 0x444444 }, // Ensure last layers threshold equals config.terrain.elevationMax to prevent holes
   ],
-  fluidLayerThresholds: [
-    // TERRAIN 0
-    { elevation: THRESHOLD * 1, depth: 1, color: 0x4081b7 },
-    { elevation: THRESHOLD * 2, depth: 2, color: 0x4081b7 },
-    { elevation: THRESHOLD * 3, depth: 3, color: 0x4081b7 },
-    // TERRAIN 1
-    { elevation: THRESHOLD * 4, depth: 4, color: 0x4081b7 },
-    { elevation: THRESHOLD * 5, depth: 5, color: 0x4081b7 },
-    { elevation: THRESHOLD * 6, depth: 6, color: 0x4081b7 },
-    // TERRAIN 2
-    { elevation: THRESHOLD * 7, depth: 7, color: 0x4081b7 },
-    { elevation: THRESHOLD * 8, depth: 8, color: 0x4081b7 },
-    { elevation: THRESHOLD * 9, depth: 9, color: 0x4081b7 },
-    // TERRAIN 3
-    { elevation: THRESHOLD * 10, depth: 10, color: 0x4081b7 },
-    { elevation: THRESHOLD * 11, depth: 11, color: 0x4081b7 },
-    { elevation: THRESHOLD * 12, depth: 12, color: 0x4081b7 },
-    // TERRAIN 4
-    { elevation: THRESHOLD * 13, depth: 13, color: 0x4081b7 },
-    { elevation: THRESHOLD * 14, depth: 14, color: 0x4081b7 },
-    { elevation: THRESHOLD * 15, depth: 15, color: 0x4081b7 },
-  ]
+  fluidLayerThresholds: [THRESHOLD * 1, THRESHOLD * 2, THRESHOLD * 3, THRESHOLD * 4, THRESHOLD * 5, THRESHOLD * 6, THRESHOLD * 7, THRESHOLD * 8, THRESHOLD * 9, THRESHOLD * 10, THRESHOLD * 11, THRESHOLD * 12],
 };
 
 export class Terrain {
@@ -82,30 +60,30 @@ export class Terrain {
       }
     }
 
-    config.fluidLayerThresholds.forEach(({elevation, depth, color}) => this.terrainGraphics.set(elevation, this.scene.add.graphics().setAlpha(1).setDepth(depth).fillStyle(color, 0.3)));
+    config.fluidLayerThresholds.forEach(threshold => this.terrainGraphics.set(threshold, this.scene.add.graphics().setAlpha(1).setDepth(threshold).setName('g' + threshold)));
   }
 
   tick(tickCounter: number) {
-    // console.time('terrain simulation tick');
+    console.time('terrain simulation tick');
     this.simulation.tick(tickCounter);
-    // console.timeEnd('terrain simulation tick');
     const bounds = this.getVisibleBounds();
     if (!bounds) return;
 
-    for (const {elevation, color} of this.config.fluidLayerThresholds) {
-      const g = this.terrainGraphics.get(elevation);
+    this.terrainGraphics.forEach((graphics) => graphics.clear());
+    for (const threshold of this.config.fluidLayerThresholds) {
+      const g = this.terrainGraphics.get(threshold);
       if (!g) throw new Error('no graphics');
-      g.clear().fillStyle(color, 0.25);
       for (let y = bounds.coordY; y <= (bounds.coordY + bounds.numCoordsY); y++) {
         for (let x = bounds.coordX; x <= bounds.coordX + bounds.numCoordsX; x++) {
           if (!this.isWithinBounds(x, y)) continue; // this can be removed if we ensure the renderQueue is always within bounds
           // const terrainElevation = this.simulation.terrain[x + y * (WORLD_X + 1)];
           // const stepped = Math.round(terrainElevation / (THRESHOLD * 3)) * (THRESHOLD * 3);
-          // if (stepped > elevation) continue;
-          this.renderFluidAt(x, y, elevation, g);
+          // if (stepped > fluidLayerThreshold) continue;
+          this.renderFluidAt(x, y, threshold, g);
         }
       }
     }
+    console.timeEnd('terrain simulation tick');
   }
 
   private getVisibleBounds(): CoordBounds | null {
@@ -142,12 +120,14 @@ export class Terrain {
 
   private renderFluidAt(x: number, y: number, threshold: number, graphics: Phaser.GameObjects.Graphics): void {
     const {terrain, fluid} = this.getCellEdges(x, y, threshold);
+    graphics.fillStyle(0x4081b7, 0.6);
+    graphics.lineStyle(2, 0x01030c, 1);
 
     const densityData = {
-      tl: Math.floor((fluid.tl >= THRESHOLD - 256 ? terrain.tl + fluid.tl : fluid.tl) / THRESHOLD) * THRESHOLD,
-      tr: Math.floor((fluid.tr >= THRESHOLD - 256 ? terrain.tr + fluid.tr : fluid.tr) / THRESHOLD) * THRESHOLD,
-      br: Math.floor((fluid.br >= THRESHOLD - 256 ? terrain.br + fluid.br : fluid.br) / THRESHOLD) * THRESHOLD,
-      bl: Math.floor((fluid.bl >= THRESHOLD - 256 ? terrain.bl + fluid.bl : fluid.bl) / THRESHOLD) * THRESHOLD,
+      tl: fluid.tl >= THRESHOLD - 256 ? terrain.tl + fluid.tl : fluid.tl,
+      tr: fluid.tr >= THRESHOLD - 256 ? terrain.tr + fluid.tr : fluid.tr,
+      br: fluid.br >= THRESHOLD - 256 ? terrain.br + fluid.br : fluid.br,
+      bl: fluid.bl >= THRESHOLD - 256 ? terrain.bl + fluid.bl : fluid.bl,
       threshold,
     };
     const posX = x * GRID;
@@ -204,7 +184,7 @@ export class Terrain {
 export interface TerrainRenderConfig {
   wallColor: number;
   terrainLayers: { elevation: number, depth: number, color: number }[];
-  fluidLayerThresholds: { elevation: number, depth: number, color: number }[];
+  fluidLayerThresholds: number[];
 }
 
 export type TerrainConfig = TerrainRenderConfig & TerrainSimulationConfig;

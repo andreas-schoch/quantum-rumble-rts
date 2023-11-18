@@ -27,7 +27,7 @@ export class BaseWeaponStructure extends BaseStructure {
   private attackCooldown = 5; // num ticks for now
   private graphics: Phaser.GameObjects.Graphics;
   // center cell and direct neighbors
-  private damagePattern: number[][] = [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]]; // self and direct neighbors
+  private damagePattern: number[][] = [[0, 0], [1, 0], [1, 1], [0, 1]];
   // private damagePattern: number[][] = [[0, 0], [1, 0], [1, 1], [0, 1], [0, -1], [1, -1], [2, 0], [2, 1], [0, 2], [1, 2], [-1, 0], [-1, 1]];
 
   pendingAmmo: EnergyRequest[] = [];
