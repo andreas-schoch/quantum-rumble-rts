@@ -4,7 +4,7 @@ export class EmitterManager {
   scene: Phaser.Scene;
   emitters: Emitter[] = [];
   onemit: (xCoord: number, yCoord: number, amount: number, pattern: number[][]) => void = () => {}; // to be implemented by whoever uses this class
-  private readonly defaultEmitPattern = [[0, 0], [1, 0], [1, 1], [0, 1]]; // all edges of cell
+  private readonly defaultEmitPattern = [[0, 0]]; // all edges of cell
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
