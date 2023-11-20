@@ -1,10 +1,11 @@
-import { GRID, TICK_DELTA } from './constants';
+import { GRID, HALF_GRID, TICK_DELTA } from './constants';
+import { drawStar } from './util/drawStar';
 
 export class EmitterManager {
   scene: Phaser.Scene;
   emitters: Emitter[] = [];
   onemit: (xCoord: number, yCoord: number, amount: number, pattern: number[][]) => void = () => {}; // to be implemented by whoever uses this class
-  private readonly defaultEmitPattern = [[0, 0], [1, 0], [1, 1], [0, 1]]; // all edges of cell
+  private readonly defaultEmitPattern = [[0, 0]]; // all edges of cell
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
@@ -12,7 +13,7 @@ export class EmitterManager {
 
   addEmitter(emitter: Omit<Emitter, 'id' | 'sprite' | 'active'>) {
     const id = Math.random().toString(36).substring(2, 10);
-    this.emitters.push({...emitter, id, active: true, sprite: this.scene.add.sprite(emitter.xCoord * GRID, emitter.yCoord * GRID, 'emitter').setOrigin(0, 0).setDepth(10000)});
+    this.emitters.push({...emitter, id, active: true, sprite: this.scene.add.sprite(emitter.xCoord * GRID + HALF_GRID, emitter.yCoord * GRID + HALF_GRID, 'emitter').setOrigin(0.5, 0.5).setDepth(10000)});
     return id;
   }
 
@@ -28,6 +29,14 @@ export class EmitterManager {
       if (emitter.ticksCooldown > 1  && tickCounter % emitter.ticksCooldown !== 1) continue;
       this.onemit(emitter.xCoord, emitter.yCoord, emitter.fluidPerSecond * TICK_DELTA, this.defaultEmitPattern);
     }
+  }
+
+  static generateTextures(scene: Phaser.Scene) {
+    const graphics = scene.add.graphics();
+    graphics.fillStyle(0x0000ff, 1);
+    drawStar(graphics, HALF_GRID, HALF_GRID, 12, HALF_GRID * 0.9, HALF_GRID * 0.4);
+    graphics.generateTexture('emitter', GRID, GRID);
+    graphics.destroy();
   }
 }
 

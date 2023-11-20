@@ -3,6 +3,7 @@ import { EnergyRequest } from '../Network';
 import GameScene from '../scenes/GameScene';
 import { GRID, WORLD_X, WORLD_Y } from '../constants';
 import { BaseStructure } from './BaseUnit';
+import { drawStar } from '../util/drawStar';
 
 // TODO consider refactoring everything to use ECS instead of inheritance...
 // (or at least create classes like HealthComponent, EnergyComponent, WeaponComponent etc. that can be added to units that need them)
@@ -27,7 +28,7 @@ export class BaseWeaponStructure extends BaseStructure {
   private attackCooldown = 5; // num ticks for now
   private graphics: Phaser.GameObjects.Graphics;
   // center cell and direct neighbors
-  private damagePattern: number[][] = [[0, 0], [1, 0], [1, 1], [0, 1]];
+  private damagePattern: number[][] = [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]]; // self and direct neighbors
   // private damagePattern: number[][] = [[0, 0], [1, 0], [1, 1], [0, 1], [0, -1], [1, -1], [2, 0], [2, 1], [0, 2], [1, 2], [-1, 0], [-1, 1]];
 
   pendingAmmo: EnergyRequest[] = [];
@@ -111,7 +112,7 @@ export class BaseWeaponStructure extends BaseStructure {
     this.graphics.lineStyle(2, 0x000000, 1);
     // background
     this.graphics.fillStyle(0xd3d3d3  , 1);
-    BaseStructure.drawStar(this.graphics, 0, 0, 4, GRID * 0.6, GRID * 0.3);
+    drawStar(this.graphics, 0, 0, 4, GRID * 0.6, GRID * 0.3);
     this.graphics.fillCircle(0, 0, GRID * 0.4);
     // progressbar
     this.graphics.fillStyle(0xff0000, 1);

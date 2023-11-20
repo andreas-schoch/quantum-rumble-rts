@@ -1,5 +1,6 @@
 import { GRID, HALF_GRID } from '../constants';
 import GameScene from '../scenes/GameScene';
+import { drawStar } from '../util/drawStar';
 import { BaseStructure } from './BaseUnit';
 
 export class Speed extends BaseStructure {
@@ -26,7 +27,7 @@ export class Speed extends BaseStructure {
     const graphics = scene.add.graphics();
     graphics.fillStyle(0xff0000, 1);
     graphics.lineStyle(2, 0x000000, 1);
-    this.drawStar(graphics, HALF_GRID, HALF_GRID, 2, HALF_GRID - 4, HALF_GRID - 4);
+    drawStar(graphics, HALF_GRID, HALF_GRID, 2, HALF_GRID - 4, HALF_GRID - 4);
     graphics.generateTexture(Speed.unitName, GRID, GRID);
     graphics.destroy();
   }

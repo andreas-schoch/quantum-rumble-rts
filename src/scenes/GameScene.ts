@@ -31,7 +31,7 @@ export default class GameScene extends Phaser.Scene {
     this.terrain = new Terrain(this);
     this.sfx_start_collect = this.sound.add('start_collect', {detune: 600, rate: 1.25, volume: 0.5 , loop: false});
     this.sfx_place_structure = this.sound.add('place_structure', {detune: 200, rate: 1.25, volume: 1 , loop: false});
-    this.add.tileSprite(0, 0, GRID * WORLD_X,GRID * WORLD_Y, 'cell_white').setOrigin(0, 0).setDepth(-1).setAlpha(0.2);
+    // this.add.tileSprite(0, 0, GRID * WORLD_X,GRID * WORLD_Y, 'cell_white').setOrigin(0, 0).setDepth(-1).setAlpha(0.2);
 
     this.scene.launch(SceneKeys.GAME_UI_SCENE, [this, () => {
       this.scene.restart();
@@ -45,11 +45,10 @@ export default class GameScene extends Phaser.Scene {
     this.network.placeUnit(this.city.coordX, this.city.coordY, this.city);
 
     const emitterManager = new EmitterManager(this);
-    emitterManager.addEmitter({xCoord: 2, yCoord: 2, fluidPerSecond: 32768, ticksCooldown: 1, ticksDelay: 0});
-    emitterManager.addEmitter({xCoord: WORLD_X - 2, yCoord: 2, fluidPerSecond: 32768, ticksCooldown: 1, ticksDelay: 0});
-    emitterManager.addEmitter({xCoord: 2, yCoord: WORLD_Y - 2, fluidPerSecond: 32768, ticksCooldown: 1, ticksDelay: 0});
-    emitterManager.addEmitter({xCoord: WORLD_X - 2, yCoord: WORLD_Y - 2, fluidPerSecond: 32768, ticksCooldown: 1, ticksDelay: 0});
-    // const id = emitterManager.addEmitter({xCoord: WORLD_X / 2, yCoord: WORLD_Y / 2, fluidPerSecond: 3276800, ticksCooldown: 1, ticksDelay: 0});
+    emitterManager.addEmitter({xCoord: 0, yCoord: 0, fluidPerSecond: 32768 * 2, ticksCooldown: 1, ticksDelay: 0});
+    emitterManager.addEmitter({xCoord: WORLD_X - 1, yCoord: 0, fluidPerSecond: 32768, ticksCooldown: 1, ticksDelay: 0});
+    emitterManager.addEmitter({xCoord: 0, yCoord: WORLD_Y - 1, fluidPerSecond: 32768, ticksCooldown: 1, ticksDelay: 0});
+    emitterManager.addEmitter({xCoord: WORLD_X - 1, yCoord: WORLD_Y - 1, fluidPerSecond: 32768 * 3, ticksCooldown: 1, ticksDelay: 0});
     emitterManager.onemit = (xCoord, yCoord, amount, pattern) => this.terrain.simulation.fluidChangeRequest(xCoord, yCoord, amount, pattern);
 
     setTimeout(() => {
@@ -63,10 +62,8 @@ export default class GameScene extends Phaser.Scene {
       timeScale: 1,
       callback: () => {
         this.tickCounter++;
-        // console.time('tick');
         emitterManager.tick(this.tickCounter);
         this.terrain.tick(this.tickCounter);
-        // console.timeEnd('tick');
         this.network.tick(this.tickCounter);
         for(const structure of BaseStructure.structuresInUpdatePriorityOrder) structure.tick(this.tickCounter);
       },

@@ -1,5 +1,6 @@
 import { GRID, HALF_GRID } from '../constants';
 import GameScene from '../scenes/GameScene';
+import { drawStar } from '../util/drawStar';
 import { BaseStructure } from './BaseUnit';
 
 export class Relay extends BaseStructure {
@@ -25,9 +26,9 @@ export class Relay extends BaseStructure {
     const graphics = scene.add.graphics();
     graphics.fillStyle(0xd3d3d3, 1);
     graphics.lineStyle(2, 0x000000, 1);
-    BaseStructure.drawStar(graphics, HALF_GRID, HALF_GRID * 1.15, 3, GRID * 0.4, GRID * 0.2);
+    drawStar(graphics, HALF_GRID, HALF_GRID * 1.15, 3, GRID * 0.4, GRID * 0.2);
     graphics.fillStyle(0xffffff, 1);
-    BaseStructure.drawStar(graphics, HALF_GRID, HALF_GRID * 1.15, 3, GRID * 0.2, GRID * 0.1);
+    drawStar(graphics, HALF_GRID, HALF_GRID * 1.15, 3, GRID * 0.2, GRID * 0.1);
     graphics.generateTexture(Relay.unitName, GRID, GRID);
     graphics.destroy();
   }

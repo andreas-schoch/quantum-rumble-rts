@@ -5,6 +5,7 @@ import { Collector } from '../units/Collector';
 import { Relay } from '../units/Relay';
 import { Reactor } from '../units/Reactor';
 import { Speed } from '../units/Speed';
+import { EmitterManager } from '../Emitter';
 
 export default class PreloadScene extends Phaser.Scene {
   constructor() {
@@ -31,6 +32,7 @@ export default class PreloadScene extends Phaser.Scene {
     Storage.generateTextures(this);
     Reactor.generateTextures(this);
     Speed.generateTextures(this);
+    EmitterManager.generateTextures(this);
 
     // background cell white
     const graphics = this.add.graphics();

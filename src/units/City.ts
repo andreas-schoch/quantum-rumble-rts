@@ -1,6 +1,7 @@
 import GameScene from '../scenes/GameScene';
 import { GRID, HALF_GRID } from '../constants';
 import { BaseStructure } from './BaseUnit';
+import { drawStar } from '../util/drawStar';
 
 export class City extends BaseStructure {
   static unitName = 'City';
@@ -28,9 +29,9 @@ export class City extends BaseStructure {
     // outer
     graphics.fillStyle(0xa88924, 1);
     graphics.lineStyle(2, 0x000000 , 1);
-    this.drawStar(graphics, HALF_GRID * 3, HALF_GRID * 3, 8, HALF_GRID * 3 - 2, HALF_GRID * 3 * 0.8);
+    drawStar(graphics, HALF_GRID * 3, HALF_GRID * 3, 8, HALF_GRID * 3 - 2, HALF_GRID * 3 * 0.8);
     graphics.fillStyle(0xa88924 + 0x333333, 1);
-    this.drawStar(graphics, HALF_GRID * 3, HALF_GRID * 3, 8, HALF_GRID * 2, HALF_GRID * 3 * 0.6);
+    drawStar(graphics, HALF_GRID * 3, HALF_GRID * 3, 8, HALF_GRID * 2, HALF_GRID * 3 * 0.6);
     graphics.generateTexture(City.unitName, GRID * 3, GRID * 3);
     graphics.destroy();
   }

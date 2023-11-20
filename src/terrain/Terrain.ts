@@ -1,5 +1,5 @@
 import { ISquareDensityData, MarchingSquares } from './MarchingSquares';
-import { GRID, THRESHOLD, WORLD_X, WORLD_Y } from '../constants';
+import { GRID, HALF_GRID, THRESHOLD, WORLD_X, WORLD_Y } from '../constants';
 import { GameObjects, Scene } from 'phaser';
 import { TerrainSimulation, TerrainSimulationConfig } from './TerrainSimulation';
 import GameScene from '../scenes/GameScene';
@@ -11,18 +11,40 @@ const defaultTerrainConfig: TerrainConfig = {
     elevationMax: THRESHOLD * 12,
   },
   fluid: {
-    overflow: 4,
+    overflow: THRESHOLD * 12,
     flowRate: 0.15,
-    evaporation: 2,
+    evaporation: 5,
   },
   wallColor: 0x9b938d - 0x111111,
   terrainLayers: [
-    { elevation: THRESHOLD * 3, depth: THRESHOLD * 3, color: 0x544741 + 0x111111 },
-    { elevation: THRESHOLD * 6, depth: THRESHOLD * 6, color: 0x544741 + 0x222222 },
-    { elevation: THRESHOLD * 9, depth: THRESHOLD * 8, color: 0x544741 + 0x333333 },
-    { elevation: THRESHOLD * 12, depth: THRESHOLD * 12, color: 0x544741 + 0x444444 }, // Ensure last layers threshold equals config.terrain.elevationMax to prevent holes
+    // { elevation: THRESHOLD * 0, depth: 0, color: 0x544741 }, // this would be the lowest layer. It's rendered differently than the rest since it's a single rectangle
+    { elevation: THRESHOLD * 3, depth: 4, color: 0x544741 + 0x111111 },
+    { elevation: THRESHOLD * 6, depth: 7, color: 0x544741 + 0x222222 },
+    { elevation: THRESHOLD * 9, depth: 10, color: 0x544741 + 0x333333 },
+    { elevation: THRESHOLD * 12, depth: 13, color: 0x544741 + 0x444444 }, // Ensure last layers threshold equals config.terrain.elevationMax to prevent holes
   ],
-  fluidLayerThresholds: [THRESHOLD * 1, THRESHOLD * 2, THRESHOLD * 3, THRESHOLD * 4, THRESHOLD * 5, THRESHOLD * 6, THRESHOLD * 7, THRESHOLD * 8, THRESHOLD * 9, THRESHOLD * 10, THRESHOLD * 11, THRESHOLD * 12],
+  fluidLayerThresholds: [
+    // TERRAIN 0
+    { elevation: THRESHOLD * 1, depth: 1, color: 0x4081b7 },
+    { elevation: THRESHOLD * 2, depth: 2, color: 0x4081b7 },
+    { elevation: THRESHOLD * 3, depth: 3, color: 0x4081b7 },
+    // TERRAIN 1
+    { elevation: THRESHOLD * 4, depth: 4, color: 0x4081b7 },
+    { elevation: THRESHOLD * 5, depth: 5, color: 0x4081b7 },
+    { elevation: THRESHOLD * 6, depth: 6, color: 0x4081b7 },
+    // TERRAIN 2
+    { elevation: THRESHOLD * 7, depth: 7, color: 0x4081b7 },
+    { elevation: THRESHOLD * 8, depth: 8, color: 0x4081b7 },
+    { elevation: THRESHOLD * 9, depth: 9, color: 0x4081b7 },
+    // TERRAIN 3
+    { elevation: THRESHOLD * 10, depth: 10, color: 0x4081b7 },
+    { elevation: THRESHOLD * 11, depth: 11, color: 0x4081b7 },
+    { elevation: THRESHOLD * 12, depth: 12, color: 0x4081b7 },
+    // TERRAIN 4
+    { elevation: THRESHOLD * 13, depth: 13, color: 0x4081b7 },
+    { elevation: THRESHOLD * 14, depth: 14, color: 0x4081b7 },
+    { elevation: THRESHOLD * 15, depth: 15, color: 0x4081b7 },
+  ]
 };
 
 export class Terrain {
@@ -38,52 +60,56 @@ export class Terrain {
     const { fluid, terrain } = config;
     this.simulation = new TerrainSimulation({ terrain, fluid });
     this.marchingSquares = new MarchingSquares({ squareSize: GRID });
+    this.initTerrain();
+    config.fluidLayerThresholds.forEach(({elevation, depth, color}) => this.terrainGraphics.set(elevation, this.scene.add.graphics().setAlpha(1).setDepth(depth).fillStyle(color, 0.4)));
+  }
 
+  tick(tickCounter: number) {
+    // console.time('terrain simulation tick');
+    this.simulation.tick(tickCounter);
+    // console.timeEnd('terrain simulation tick');
+    const bounds = this.getVisibleBounds();
+    if (!bounds) return;
+
+    for (const {elevation, color} of this.config.fluidLayerThresholds) {
+      const g = this.terrainGraphics.get(elevation);
+      if (!g) throw new Error('no graphics');
+      g.clear().fillStyle(color, 0.4);
+      for (let y = bounds.coordY; y <= (bounds.coordY + bounds.numCoordsY); y++) {
+        for (let x = bounds.coordX; x <= bounds.coordX + bounds.numCoordsX; x++) {
+          if (!this.isWithinBounds(x, y)) continue;
+          this.renderFluidAt(x, y, elevation, g);
+        }
+      }
+    }
+  }
+
+  private initTerrain() {
     // TODO find more optimal way to display terrain. Static render textures have HORRIBLE performance when creeper graphics is underflowing it.
     // BOTTOM LAYER
-    const graphics = this.scene.add.graphics().setDepth(1).setName('terrain').setAlpha(1);
+    let graphics = this.scene.add.graphics().setDepth(1);
     const BASE_TERRAIN_COLOR = 0x544741;
     graphics.fillStyle(BASE_TERRAIN_COLOR, 1);
     graphics.fillRect(0, 0, WORLD_X * GRID, WORLD_Y * GRID);
     // ELEVATION LAYERS
     for (const { elevation: threshold, color, depth} of defaultTerrainConfig.terrainLayers) {
-      const graphics = this.scene.add.graphics().setDepth(depth).setName('terrain').setAlpha(1);
+      graphics = this.scene.add.graphics().setDepth(depth);
       graphics.lineStyle(2, 0x000000);
       for (let y = 0; y < WORLD_Y; y++) {
         for (let x = 0; x < WORLD_X; x++) {
           graphics.fillStyle(0x9b938d - 0x111111, 1);
-          this.renderTerrainAt(x, y, threshold - 8, graphics, 10, 20);
-          this.renderTerrainAt(x, y, threshold - 4, graphics, 5, 10);
+          this.renderTerrainAt(x, y, threshold, graphics, 9, 30);
+          this.renderTerrainAt(x, y, threshold, graphics, 6, 20);
+          this.renderTerrainAt(x, y, threshold, graphics, 3, 10);
           graphics.fillStyle(color, 1);
           this.renderTerrainAt(x, y, threshold, graphics, 0, 0);
         }
       }
     }
-
-    config.fluidLayerThresholds.forEach(threshold => this.terrainGraphics.set(threshold, this.scene.add.graphics().setAlpha(1).setDepth(threshold).setName('g' + threshold)));
-  }
-
-  tick(tickCounter: number) {
-    console.time('terrain simulation tick');
-    this.simulation.tick(tickCounter);
-    const bounds = this.getVisibleBounds();
-    if (!bounds) return;
-
-    this.terrainGraphics.forEach((graphics) => graphics.clear());
-    for (const threshold of this.config.fluidLayerThresholds) {
-      const g = this.terrainGraphics.get(threshold);
-      if (!g) throw new Error('no graphics');
-      for (let y = bounds.coordY; y <= (bounds.coordY + bounds.numCoordsY); y++) {
-        for (let x = bounds.coordX; x <= bounds.coordX + bounds.numCoordsX; x++) {
-          if (!this.isWithinBounds(x, y)) continue; // this can be removed if we ensure the renderQueue is always within bounds
-          // const terrainElevation = this.simulation.terrain[x + y * (WORLD_X + 1)];
-          // const stepped = Math.round(terrainElevation / (THRESHOLD * 3)) * (THRESHOLD * 3);
-          // if (stepped > fluidLayerThreshold) continue;
-          this.renderFluidAt(x, y, threshold, g);
-        }
-      }
-    }
-    console.timeEnd('terrain simulation tick');
+    graphics = this.scene.add.graphics().setDepth(this.config.terrainLayers.at(-1)?.depth || 0);
+    graphics.fillStyle(0x333333, 1); // matching camera background
+    graphics.fillRect(0, WORLD_Y * GRID, WORLD_X * GRID, GRID).setDepth(this.config.terrainLayers.at(-1)?.depth || 0);
+    graphics.fillRect(WORLD_X * GRID, 0, GRID,WORLD_Y * GRID + GRID).setDepth(this.config.terrainLayers.at(-1)?.depth || 0);
   }
 
   private getVisibleBounds(): CoordBounds | null {
@@ -120,8 +146,6 @@ export class Terrain {
 
   private renderFluidAt(x: number, y: number, threshold: number, graphics: Phaser.GameObjects.Graphics): void {
     const {terrain, fluid} = this.getCellEdges(x, y, threshold);
-    graphics.fillStyle(0x4081b7, 0.6);
-    graphics.lineStyle(2, 0x01030c, 1);
 
     const densityData = {
       tl: fluid.tl >= THRESHOLD - 256 ? terrain.tl + fluid.tl : fluid.tl,
@@ -184,7 +208,7 @@ export class Terrain {
 export interface TerrainRenderConfig {
   wallColor: number;
   terrainLayers: { elevation: number, depth: number, color: number }[];
-  fluidLayerThresholds: number[];
+  fluidLayerThresholds: { elevation: number, depth: number, color: number }[];
 }
 
 export type TerrainConfig = TerrainRenderConfig & TerrainSimulationConfig;
@@ -195,12 +219,3 @@ export interface CoordBounds {
   numCoordsX: number;
   numCoordsY: number;
 }
-
-// TODO IDEA - assign 3 fluid layers for each terrain layer and don't allow them to flow anywhere but within their threshold
-//  Meaning that the fluid will not flow UNDER the terrain and there won't be a need to have different z-levels for terrain making it possible
-//  for the terrain to be a single big texture or bunch of smaller textures on the same z-level
-//  While no fluid level can flow where there is more terrain elevation than it's max, it can flow where it is lower, so visually it wont look too different from now.
-//  The one problem with having terrain be a single layer, is with units that are placed "behind" that should look like they are behind.
-//  Maybe the fix to that is to either keep the z-index or create a second layer only for the parts of the terrain that may be in front of units (1-2 cells of the relevant shapes)
-
-//  The problem now is that fluid is flowing below terrain. This is bad for performance but also palin wrong.
