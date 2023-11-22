@@ -1,5 +1,5 @@
 import { ISquareDensityData, MarchingSquares } from './MarchingSquares';
-import { GRID, HALF_GRID, THRESHOLD, WORLD_X, WORLD_Y } from '../constants';
+import { GRID, THRESHOLD, WORLD_X, WORLD_Y } from '../constants';
 import { GameObjects, Scene } from 'phaser';
 import { TerrainSimulation, TerrainSimulationConfig } from './TerrainSimulation';
 import GameScene from '../scenes/GameScene';

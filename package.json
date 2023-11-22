@@ -6,7 +6,9 @@
     "start": "webpack serve --config webpack/webpack.dev.js",
     "build": "rimraf dist && webpack --config webpack/webpack.prod.js",
     "bundle": "npm run build",
-    "serve": "serve dist"
+    "serve": "serve dist",
+    "pages-predeploy": "npm run build",
+    "pages-deploy": "gh-pages -d ./dist"
   },
   "devDependencies": {
     "@types/node": "^20.4.4",
