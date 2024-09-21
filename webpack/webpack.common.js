@@ -43,6 +43,7 @@ module.exports = {
       patterns: [
         {from: 'assets/audio', to: 'assets/audio'},
         {from: 'assets/html', to: 'assets/html'},
+        { from: 'stats.js', to: 'stats.js' },
       ],
     }),
   ],

@@ -34,8 +34,8 @@ export class EmitterManager {
   static generateTextures(scene: Phaser.Scene) {
     const graphics = scene.add.graphics();
     graphics.fillStyle(0x0000ff, 1);
-    drawStar(graphics, HALF_GRID, HALF_GRID, 12, HALF_GRID * 0.9, HALF_GRID * 0.4);
-    graphics.generateTexture('emitter', GRID, GRID);
+    drawStar(graphics, HALF_GRID * 3, HALF_GRID * 3, 12, HALF_GRID * 3 * 0.9, HALF_GRID * 3 * 0.4);
+    graphics.generateTexture('emitter', GRID * 3, GRID * 3);
     graphics.destroy();
   }
 }

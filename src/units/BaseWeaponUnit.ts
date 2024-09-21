@@ -1,7 +1,7 @@
 import { Cell } from '../Network';
 import { EnergyRequest } from '../Network';
 import GameScene from '../scenes/GameScene';
-import { GRID, WORLD_X, WORLD_Y } from '../constants';
+import { GRID, level } from '../constants';
 import { BaseStructure } from './BaseUnit';
 import { drawStar } from '../util/drawStar';
 
@@ -81,7 +81,7 @@ export class BaseWeaponStructure extends BaseStructure {
     this.lastAttack = tickCounter;
     this.draw();
     BaseWeaponStructure.attackSFX.play();
-    this.scene.terrain.simulation.fluidChangeRequest(this.coordX, this.coordY, -BaseWeaponStructure.damage, this.damagePattern);
+    this.scene.simulation.fluidChangeRequest(this.coordX, this.coordY, -BaseWeaponStructure.damage, this.damagePattern);
   }
 
   protected getNearestTarget(): Cell | null {
@@ -90,7 +90,7 @@ export class BaseWeaponStructure extends BaseStructure {
 
     for (let y = this.coordY - this.attackRange; y <= this.coordY + this.attackRange; y++) {
       for (let x = this.coordX - this.attackRange; x <= this.coordX + this.attackRange; x++) {
-        if (x < 0 || y < 0 || x >= WORLD_X || y >= WORLD_Y) continue; // skip out of bounds
+        if (x < 0 || y < 0 || x >= level.sizeX || y >= level.sizeY) continue; // skip out of bounds
         const cell = this.scene.network.world[y][x];
         if (!cell.ref) continue; // skip empty cells
         const distance = Math.abs(x - this.coordX) + Math.abs(y - this.coordY); // manhattan distance, not euclidean
@@ -112,18 +112,18 @@ export class BaseWeaponStructure extends BaseStructure {
     this.graphics.lineStyle(2, 0x000000, 1);
     // background
     this.graphics.fillStyle(0xd3d3d3  , 1);
-    drawStar(this.graphics, 0, 0, 4, GRID * 0.6, GRID * 0.3);
-    this.graphics.fillCircle(0, 0, GRID * 0.4);
+    drawStar(this.graphics, 0, 0, 4, GRID * 3 * 0.6, GRID * 3 * 0.3);
+    this.graphics.fillCircle(0, 0, GRID * 3 * 0.4);
     // progressbar
     this.graphics.fillStyle(0xff0000, 1);
     const degrees = 360 * (this.ammoCurrent / this.ammoMax);
-    this.graphics.slice(0, 0, GRID * 0.4, Phaser.Math.DegToRad(rotation), Phaser.Math.DegToRad(rotation + degrees));
+    this.graphics.slice(0, 0, GRID * 3 * 0.4, Phaser.Math.DegToRad(rotation), Phaser.Math.DegToRad(rotation + degrees));
     this.graphics.fillPath();
-    this.graphics.strokeCircle(0, 0, GRID * 0.4);
+    this.graphics.strokeCircle(0, 0, GRID * 3 * 0.4);
     // inside
     this.graphics.fillStyle(0xffffff, 2);
-    this.graphics.fillCircle(0, 0, GRID * 0.2);
-    this.graphics.strokeCircle(0, 0, GRID * 0.2);
+    this.graphics.fillCircle(0, 0, GRID * 3 * 0.2);
+    this.graphics.strokeCircle(0, 0, GRID * 3 * 0.2);
     this.graphics.setDepth(500);
   }
 }

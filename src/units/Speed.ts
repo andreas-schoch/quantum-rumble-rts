@@ -27,8 +27,8 @@ export class Speed extends BaseStructure {
     const graphics = scene.add.graphics();
     graphics.fillStyle(0xff0000, 1);
     graphics.lineStyle(2, 0x000000, 1);
-    drawStar(graphics, HALF_GRID, HALF_GRID, 2, HALF_GRID - 4, HALF_GRID - 4);
-    graphics.generateTexture(Speed.unitName, GRID, GRID);
+    drawStar(graphics, HALF_GRID * 3, HALF_GRID * 3, 2, (HALF_GRID * 3) - 8, (HALF_GRID * 3) - 8);
+    graphics.generateTexture(Speed.unitName, GRID * 3, GRID * 3);
     graphics.destroy();
   }
 }

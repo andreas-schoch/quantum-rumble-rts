@@ -3,21 +3,10 @@ export interface IMarchingSquaresConfig {
 }
 
 export type Point = { x: number; y: number };
-export type Line = { p1: Point; p2: Point };
+export type Line = { p1: Point; p2: Point, lw: number, c: number };
 
-/** Represents a single "Marching Square */
-export interface ISquareDensityData {
-  /** topLeft corner Density */
-  tl: number;
-  /** topRight corner Density */
-  tr: number;
-  /** bottomRight corner Density */
-  br: number;
-  /** bottomLeft corner Density */
-  bl: number;
-  /** Min Density corners need to have to be considered solid */
-  threshold: number;
-}
+/** Represents a single "Marching Square: `[TopLeft, TopRight, BottomRight, BottomLeft]` **/
+export type DensityData = [number, number, number, number];
 
 export interface ISquareGeomData {
   polygons: Point[][];
@@ -37,135 +26,130 @@ export class MarchingSquares {
   polygonCache: Map<string, ISquareGeomData> = new Map();
   // private readonly polygonLookupFactory: ((c: ISquareDensityData) => ISquareGeomDataRaw)[];
   private readonly config: IMarchingSquaresConfig;
+  private shapeTable: ISquareGeomData[] = [];
 
   constructor(config: IMarchingSquaresConfig = DEFAULT_CONFIG) {
     this.config = config;
+    this.shapeTable = this.createShapeTable(config.squareSize);
   }
 
-  getSquareGeomData(e: ISquareDensityData): ISquareGeomData {
-    const l = this.ilerp;
-    const s = this.config.squareSize;
-    const shapeIndex = this.getShapeIndex(e);
-    const hash: string = this.getHashKey(e, shapeIndex);
+  getSquareGeomData(densityData: DensityData, threshold): ISquareGeomData {
+    const shapeIndex = this.getShapeIndex(densityData, threshold);
+    return this.shapeTable[shapeIndex];
+  }
 
-    const polygons: Point[][] = [];
-    const isoLines: Line[] = [];
-    let poly: Point[] = [];
-    switch (shapeIndex) {
-    case 0: // empty square, do nothing
-      break;
-    case 1: // ◣ bottomLeft Full
-      poly = [{x: 0, y: l(e.tl, e.bl, e.threshold)}, {x: l(e.bl, e.br, e.threshold), y: s}, {x: 0, y: s}];
-      polygons.push(poly);
-      isoLines.push({p1: poly[0], p2: poly[1]});
-      break;
-    case 2: // ◢ bottomRight full
-      poly = [{x: l(e.bl, e.br, e.threshold), y: s}, {x: s, y: l(e.tr, e.br, e.threshold)}, {x: s, y: s}];
-      polygons.push(poly);
-      isoLines.push({p1: poly[0], p2: poly[1]});
-      break;
-    case 3: // ▄▄ bottom full
-      poly = [{x: 0, y: l(e.tl, e.bl, e.threshold)}, {x: s, y: l(e.tr, e.br, e.threshold)}, {x: s, y: s}, {x: 0, y: s}];
-      polygons.push(poly);
-      isoLines.push({p1: poly[0], p2: poly[1]});
-      break;
-    case 4: // ◥ topRight full
-      poly = [{x: s, y: l(e.tr, e.br, e.threshold)}, {x: l(e.tl, e.tr, e.threshold), y: 0}, {x: s, y: 0}];
-      polygons.push(poly);
-      isoLines.push({p1: poly[0], p2: poly[1]});
-      break;
-    case 5: // ◩◪ TopLeft and bottomRight full (Could also be topRight and bottomLeft full depending on density values but simplified for now)
-      poly = [{x: 0, y: l(e.tl, e.bl, e.threshold)}, {x: l(e.bl, e.br, e.threshold), y: s}, {x: 0, y: s}];
-      polygons.push(poly);
-      isoLines.push({p1: poly[0], p2: poly[1]});
-      poly = [{x: s, y: l(e.tr, e.br, e.threshold)}, {x: l(e.tl, e.tr, e.threshold), y: 0}, {x: s, y: 0}];
-      polygons.push(poly);
-      isoLines.push({p1: poly[0], p2: poly[1]});
-      break;
-    case 6: //
-      poly = [{x: l(e.bl, e.br, e.threshold), y: s}, {x: l(e.tl, e.tr, e.threshold), y: 0}, {x: s, y: 0}, {x: s, y: s}];
-      polygons.push(poly);
-      isoLines.push({p1: poly[0], p2: poly[1]});
-      break;
-    case 7:
-      poly = [{x: l(e.tl, e.tr, e.threshold), y: 0}, {x: 0, y: l(e.tl, e.bl, e.threshold)}, {x: 0, y: s}, {x: s, y: s}, {x: s, y: 0}];
-      polygons.push(poly);
-      isoLines.push({p1: poly[0], p2: poly[1]});
-      break;
-    case 8:
-      poly = [{x: l(e.tl, e.tr, e.threshold), y: 0}, {x: 0, y: l(e.tl, e.bl, e.threshold)}, {x: 0, y: 0}];
-      polygons.push(poly);
-      isoLines.push({p1: poly[0], p2: poly[1]});
-      break;
-    case 9: // right full
-      poly = [{x: l(e.tl, e.tr, e.threshold), y: 0}, {x: l(e.bl, e.br, e.threshold), y: s}, {x: 0, y: s}, {x: 0, y: 0}];
-      polygons.push(poly);
-      isoLines.push({p1: poly[0], p2: poly[1]});
-      break;
-    case 10: // topLeft and bottomRight empty (Could also be topRight and bottomLeft empty depending on density values but simplified for now)
-      poly = [{x: 0, y: 0}, {x: l(e.tl, e.tr, e.threshold), y: 0}, {x: s, y: l(e.tr, e.br, e.threshold)}, {x: s, y: s}, {x: l(e.bl, e.br, e.threshold), y: s}, {x: 0, y: l(e.tl, e.bl, e.threshold)}];
-      polygons.push(poly);
-      isoLines.push({p1: poly[1], p2: poly [2]});
-      isoLines.push({p1: poly[4], p2: poly [5]});
-      break;
-    case 11: // topRight empty
-      poly = [{x: 0, y: 0}, {x: l(e.tl, e.tr, e.threshold), y: 0}, {x: s, y: l(e.tr, e.br, e.threshold)}, {x: s, y: s}, {x: 0, y: s}];
-      polygons.push(poly);
-      isoLines.push({p1: poly[1], p2: poly [2]});
-      break;
-    case 12: // top full
-      poly = [{x: 0, y: 0}, {x: s, y: 0}, {x: s, y: l(e.tr, e.br, e.threshold)}, {x: 0, y: l(e.tl, e.bl, e.threshold)}];
-      polygons.push(poly);
-      isoLines.push({p1: poly[2], p2: poly [3]});
-      break;
-    case 13: // bottomRight empty
-      poly = [{x: 0, y: 0}, {x: s, y: 0}, {x: s, y: l(e.tr, e.br, e.threshold)}, {x: l(e.bl, e.br, e.threshold), y: s}, {x: 0, y: s}];
-      polygons.push(poly);
-      isoLines.push({p1: poly[2], p2: poly [3]});
-      break;
-    case 14:
-      // bottom left empty
-      poly = [{x: 0, y: 0}, {x: s, y: 0}, {x: s, y: s}, {x: l(e.bl, e.br, e.threshold), y: s}, {x: 0, y: l(e.tl, e.bl, e.threshold)}];
-      polygons.push(poly);
-      isoLines.push({p1: poly[3], p2: poly [4]});
-      break;
-    case 15: // ■ full square
-      polygons.push([{x: 0, y: 0}, {x: s, y: 0}, {x: this.config.squareSize, y: this.config.squareSize}, {x: 0, y: this.config.squareSize}]);
-      break;
-    default:
-      throw new Error('Should never happen');
+  private createShapeTable(s: number): ISquareGeomData[] {
+    const shapeTable: ISquareGeomData[] = [];
+
+    // Define corner points and edge midpoints
+    const topLeft: Point = { x: 0, y: 0 };
+    const topRight: Point = { x: s, y: 0 };
+    const bottomLeft: Point = { x: 0, y: s };
+    const bottomRight: Point = { x: s, y: s };
+
+    const leftMid: Point = { x: 0, y: s / 2 };
+    const rightMid: Point = { x: s, y: s / 2 };
+    const topMid: Point = { x: s / 2, y: 0 };
+    const bottomMid: Point = { x: s / 2, y: s };
+
+    // Precompute the polygons and isoLines for each possible shapeIndex
+    for (let shapeIndex = 0; shapeIndex < 16; shapeIndex++) {
+      const polygons: Point[][] = [];
+      const isoLines: Line[] = [];
+
+      switch (shapeIndex) {
+      case 0: // Empty square
+        break;
+      case 1: // Bottom-left corner full
+        polygons.push([leftMid, bottomMid, bottomLeft]);
+        isoLines.push({ p1: leftMid, p2: bottomMid, lw: 1, c: 0xffffff });
+        break;
+      case 2: // Bottom-right corner full
+        polygons.push([rightMid, bottomRight, bottomMid]);
+        isoLines.push({ p1: bottomMid, p2: rightMid, lw: 1, c: 0xffffff });
+        break;
+      case 3: // Bottom half full
+        polygons.push([leftMid, rightMid, bottomRight, bottomLeft]);
+        isoLines.push({ p1: leftMid, p2: rightMid, lw: 1, c: 0xffffff });
+        break;
+      case 4: // Top-right corner full
+        polygons.push([topMid, topRight, rightMid]);
+        isoLines.push({ p1: rightMid, p2: topMid, lw: 2, c: 0x000000 });
+        break;
+      case 5: // Opposite corners full (bottom-left and top-right full)
+        polygons.push([topMid, topRight, rightMid, bottomMid, bottomLeft, leftMid]);
+        isoLines.push({ p1: leftMid, p2: topMid, lw: 1, c: 0xffffff });
+        isoLines.push({ p1: bottomMid, p2: rightMid, lw: 2, c: 0x000000 });
+        break;
+      case 6: // Right half full
+        polygons.push([topMid, topRight, bottomRight, bottomMid]);
+        isoLines.push({ p1: bottomMid, p2: topMid, lw: 2, c: 0x000000 });
+        break;
+      case 7: // All but top-left corner full
+        polygons.push([topMid, topRight, bottomRight, bottomLeft, leftMid]);
+        isoLines.push({ p1: topMid, p2: leftMid, lw: 1, c: 0xffffff });
+        break;
+      case 8: // Top-left corner full
+        polygons.push([topLeft, topMid, leftMid]);
+        isoLines.push({ p1: topMid, p2: leftMid, lw: 2, c: 0x000000 });
+        break;
+      case 9: // Left half full
+        polygons.push([topLeft, topMid, bottomMid, bottomLeft]);
+        isoLines.push({ p1: topMid, p2: bottomMid, lw: 2, c: 0x000000 });
+        break;
+      case 10: // Opposite corners full (top-left and bottom-right full)
+        polygons.push([topLeft, topMid, rightMid, bottomRight, bottomMid, leftMid]);
+        isoLines.push({ p1: topMid, p2: rightMid, lw: 1, c: 0xffffff });
+        isoLines.push({ p1: bottomMid, p2: leftMid, lw: 2, c: 0x000000 });
+        break;
+      case 11: // All but top-right corner full
+        polygons.push([topLeft, topMid, rightMid, bottomRight, bottomLeft]);
+        isoLines.push({ p1: topMid, p2: rightMid, lw: 1, c: 0xffffff });
+        break;
+      case 12: // Top half full
+        polygons.push([topLeft, topRight, rightMid, leftMid]);
+        isoLines.push({ p1: rightMid, p2: leftMid, lw: 2, c: 0x000000 });
+        break;
+      case 13: // All but bottom-right corner full
+        polygons.push([topLeft, topRight, rightMid, bottomMid, bottomLeft]);
+        isoLines.push({ p1: rightMid, p2: bottomMid, lw: 2, c: 0x000000 });
+        break;
+      case 14: // All but bottom-left corner full
+        polygons.push([topLeft, topRight, bottomRight, bottomMid, leftMid]);
+        isoLines.push({ p1: bottomMid, p2: leftMid, lw: 2, c: 0x000000 });
+        break;
+      case 15: // Full square
+        polygons.push([topLeft, topRight, bottomRight, bottomLeft]);
+        break;
+      default:
+        throw new Error('Invalid shape index');
+      }
+
+      shapeTable[shapeIndex] = { polygons, isoLines, shapeIndex };
     }
 
-    return {polygons, isoLines, shapeIndex, hash};
+    return shapeTable;
   }
 
-  private getHashKey(data: ISquareDensityData, index?: number): string {
-    index = index || this.getShapeIndex(data);
-    if (index === 0) return 'empty-square';
-    if (index === 15) return 'full-square';
-    const {tl, tr, br, bl} = MarchingSquares.floorDensityValues(data);
-    return `${tl}-${tr}-${br}-${bl}`;
-  }
+  getShapeIndex(data: DensityData, threshold): number {
+    const [tl, tr, br, bl] = data;
 
-  getShapeIndex(data: ISquareDensityData): number {
-    const {tl, tr, br, bl, threshold} = data;
+    // Attempt to render a single layer of fluid by matching the opposite shape
+    // Doesn't quite work as expected yet as there are edgecases which need custom shapes
+    // if (threshold < THRESHOLD * 11) {
+    // const val1 = tl >= threshold && tl < (threshold + THRESHOLD) ? 8 : 0;
+    // const val2 = tr >= threshold && tr < (threshold + THRESHOLD) ? 4 : 0;
+    // const val3 = br >= threshold && br < (threshold + THRESHOLD) ? 2 : 0;
+    // const val4 = bl >= threshold && bl < (threshold + THRESHOLD) ? 1 : 0;
+    // const shape =  val1 + val2 + val3 + val4;
+    // return shape;
+    // } else {
     const val1 = tl >= threshold ? 8 : 0;
     const val2 = tr >= threshold ? 4 : 0;
     const val3 = br >= threshold ? 2 : 0;
     const val4 = bl >= threshold ? 1 : 0;
-    return val1 + val2 + val3 + val4;
-  }
-
-  /** Inverse lerp */
-  private ilerp = (eA: number, eB: number, threshold: number): number => {
-    return ((threshold - eA) / (eB - eA)) * this.config.squareSize;
-  };
-
-  private static floorDensityValues(data: ISquareDensityData): ISquareDensityData {
-    data.tl = Math.floor(data.tl);
-    data.tr = Math.floor(data.tr);
-    data.br = Math.floor(data.br);
-    data.bl = Math.floor(data.bl);
-    return data;
+    const shape =  val1 + val2 + val3 + val4;
+    return shape;
+    // }
   }
 }

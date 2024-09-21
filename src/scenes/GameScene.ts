@@ -1,10 +1,13 @@
-import { DEFAULT_WIDTH, DEFAULT_ZOOM, GRID, MAX_ZOOM, MIN_ZOOM, TICK_RATE, SceneKeys, WORLD_X, WORLD_Y, EVENT_UNIT_SELECTION_CHANGE } from '../constants';
+import { DEFAULT_WIDTH, DEFAULT_ZOOM, GRID, MAX_ZOOM, MIN_ZOOM, TICK_RATE, SceneKeys, EVENT_UNIT_SELECTION_CHANGE, level } from '../constants';
 import { UNITS, Unit } from '..';
 import { City } from '../units/City';
 import { Network } from '../Network';
 import { BaseStructure } from '../units/BaseUnit';
-import { Terrain as Terrain } from '../terrain/Terrain';
+import { TerrainRenderer as TerrainRenderer } from '../terrain/Terrain';
 import { EmitterManager } from '../Emitter';
+import { wrap, Remote } from 'comlink';
+import SimulationWorker from 'worker-loader!../workers/simulation.worker.ts';
+import { TerrainSimulation } from '../terrain/TerrainSimulation.js';
 
 export default class GameScene extends Phaser.Scene {
   observer: Phaser.Events.EventEmitter = new Phaser.Events.EventEmitter();
@@ -19,15 +22,16 @@ export default class GameScene extends Phaser.Scene {
   sfx_start_collect: Phaser.Sound.BaseSound;
   sfx_place_structure: Phaser.Sound.BaseSound;
   tickCounter: number;
-  terrain: Terrain;
+  terrain: TerrainRenderer;
   private selectedUnitClass: Unit | null;
+  simulation: Remote<TerrainSimulation>;
+  emitterManager: EmitterManager;
 
   constructor() {
     super({key: SceneKeys.GAME_SCENE});
   }
 
   private create() {
-    this.terrain = new Terrain(this);
     this.sfx_start_collect = this.sound.add('start_collect', {detune: 600, rate: 1.25, volume: 0.5 , loop: false});
     this.sfx_place_structure = this.sound.add('place_structure', {detune: 200, rate: 1.25, volume: 1 , loop: false});
     // this.add.tileSprite(0, 0, GRID * WORLD_X,GRID * WORLD_Y, 'cell_white').setOrigin(0, 0).setDepth(-1).setAlpha(0.2);
@@ -40,37 +44,37 @@ export default class GameScene extends Phaser.Scene {
     this.observer.removeAllListeners();
     this.network = new Network(this);
 
-    this.city = new City(this, Math.floor(WORLD_X / 2), Math.floor(WORLD_Y / 2));
+    this.city = new City(this, Math.floor(level.cityCoords.x), Math.floor(level.cityCoords.y));
     this.network.placeUnit(this.city.coordX, this.city.coordY, this.city);
+    this.simulation = wrap(new SimulationWorker());
+    this.simulation.getData().then(({terrainData, fluidData}) => {
+      this.terrain = new TerrainRenderer(this, terrainData, fluidData);
 
-    const emitterManager = new EmitterManager(this);
-    emitterManager.addEmitter({xCoord: 0, yCoord: 0, fluidPerSecond: 32768 * 2, ticksCooldown: 1, ticksDelay: 0});
-    emitterManager.addEmitter({xCoord: WORLD_X - 1, yCoord: 0, fluidPerSecond: 32768, ticksCooldown: 1, ticksDelay: 0});
-    emitterManager.addEmitter({xCoord: 0, yCoord: WORLD_Y - 1, fluidPerSecond: 32768, ticksCooldown: 1, ticksDelay: 0});
-    emitterManager.addEmitter({xCoord: WORLD_X - 1, yCoord: WORLD_Y - 1, fluidPerSecond: 32768 * 3, ticksCooldown: 1, ticksDelay: 0});
-    emitterManager.onemit = (xCoord, yCoord, amount, pattern) => this.terrain.simulation.fluidChangeRequest(xCoord, yCoord, amount, pattern);
+      this.emitterManager = new EmitterManager(this);
 
-    setTimeout(() => {
-      // emitterManager.removeEmitter(id);
-    }, 5000);
+      level.emitters.forEach(em => this.emitterManager.addEmitter(em));
+      this.emitterManager.onemit = async (xCoord, yCoord, amount, pattern) => await this.simulation.fluidChangeRequest(xCoord, yCoord, amount, pattern);
 
-    this.tickCounter = 0;
-    // Only rendering related things should happen every frame. I potentially want to be able to simulate this game on a server, so it needs to be somewhat deterministic
-    this.time.addEvent({
-      delay: TICK_RATE,
-      timeScale: 1,
-      callback: () => {
-        this.tickCounter++;
-        emitterManager.tick(this.tickCounter);
-        this.terrain.tick(this.tickCounter);
-        this.network.tick(this.tickCounter);
-        for(const structure of BaseStructure.structuresInUpdatePriorityOrder) structure.tick(this.tickCounter);
-      },
-      callbackScope: this,
-      loop: true
+      this.tickCounter = 0;
+      // Only rendering related things should happen every frame. I potentially want to be able to simulate this game on a server, so it needs to be somewhat deterministic
+      this.time.addEvent({
+        delay: TICK_RATE,
+        timeScale: 1,
+        callback: () => {
+          this.tickCounter++;
+          this.simulation.tick(this.tickCounter).then(() => {
+            this.emitterManager.tick(this.tickCounter);
+            this.terrain.tick(this.tickCounter);
+            this.network.tick(this.tickCounter);
+            for(const structure of BaseStructure.structuresInUpdatePriorityOrder) structure.tick(this.tickCounter);
+          });
+        },
+        callbackScope: this,
+        loop: true
+      });
+
+      this.observer.on(EVENT_UNIT_SELECTION_CHANGE, (unitIndex: number) => this.selectUnit(unitIndex, false));
     });
-
-    this.observer.on(EVENT_UNIT_SELECTION_CHANGE, (unitIndex: number) => this.selectUnit(unitIndex, false));
   }
 
   update(time: number, delta: number) {
@@ -83,8 +87,8 @@ export default class GameScene extends Phaser.Scene {
     const resolutionMod = this.cameras.main.width / DEFAULT_WIDTH;
     camera.setZoom(DEFAULT_ZOOM * resolutionMod);
     camera.setBackgroundColor(0x333333);
-    camera.centerOnX(GRID * WORLD_X / 2);
-    camera.centerOnY(GRID * WORLD_Y / 2);
+    camera.centerOnX(GRID * level.sizeX / 2);
+    camera.centerOnY(GRID * level.sizeY / 2);
     // KEYBOARD STUFF
     const keyboard = this.input.keyboard;
     if (!keyboard) throw new Error('cursors is null');
@@ -158,7 +162,7 @@ export default class GameScene extends Phaser.Scene {
       this.pointerCoordY = Math.floor(p.worldY / GRID);
       const {pointerCoordX, pointerCoordY} = this;
       if (pointerCoordX === null || pointerCoordY === null) return;
-      if (pointerCoordX < 0 || pointerCoordY < 0 || pointerCoordX > WORLD_X || pointerCoordY > WORLD_Y) return; // skip out of bounds
+      if (pointerCoordX < 0 || pointerCoordY < 0 || pointerCoordX > level.sizeX || pointerCoordY > level.sizeY) return; // skip out of bounds
 
       if (this.selectedUnitClass) {
         const unit = new this.selectedUnitClass(this, pointerCoordX, pointerCoordY);

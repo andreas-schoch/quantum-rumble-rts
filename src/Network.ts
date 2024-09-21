@@ -3,7 +3,7 @@ import GameScene from './scenes/GameScene';
 import { Graph, PathfinderResult } from './Graph';
 import { BaseStructure } from './units/BaseUnit';
 import { City } from './units/City';
-import { GRID, HALF_GRID, TICK_DELTA, WORLD_X, WORLD_Y } from './constants';
+import { GRID, HALF_GRID, level, TICK_DELTA } from './constants';
 import { Unit } from '.';
 import { Remote, wrap } from 'comlink';
 import { EVENT_ENERGY_CONSUMPTION_CHANGE, EVENT_ENERGY_PRODUCTION_CHANGE, EVENT_ENERGY_STORAGE_CHANGE } from './constants';
@@ -40,9 +40,9 @@ export class Network {
   energyConsumedPerSecond = 0;
 
   constructor(scene: GameScene) {
-    for (let y = 0; y < WORLD_Y; y++) {
+    for (let y = 0; y < level.sizeY; y++) {
       const row : Cell[]= [];
-      for (let x = 0; x < WORLD_X; x++) {
+      for (let x = 0; x < level.sizeX; x++) {
         row.push({x, y, ref: null});
       }
       this.world.push(row);
@@ -52,7 +52,7 @@ export class Network {
     this.scene = scene;
     this.previewEdgeSprite = this.scene.add.sprite(0, 0, 'cell_green').setDepth(499).setOrigin(0, 0.5);
     this.previewUnitSprite = this.scene.add.sprite(0, 0, 'cell_green').setDepth(499).setOrigin(0, 0.5);
-    this.previewEdgeRenderTexture = this.scene.add.renderTexture(0, 0, WORLD_X * GRID, WORLD_Y * GRID).setDepth(499).setOrigin(0, 0).setAlpha(0.5);
+    this.previewEdgeRenderTexture = this.scene.add.renderTexture(0, 0, level.sizeX * GRID, level.sizeY * GRID).setDepth(499).setOrigin(0, 0).setAlpha(0.5);
     this.previewEdgeSprite.setVisible(false);
     this.previewEdgeRenderTexture.draw(this.previewEdgeSprite);
   }
@@ -179,9 +179,9 @@ export class Network {
   }
 
   previewStructure(coordX: number | null, coordY: number | null, unitClass: Unit | null) {
-    if (coordX === null || coordY === null || coordX < 0 || coordY < 0 || coordX >= WORLD_X || coordY >= WORLD_Y) return; // skip out of bounds
+    if (coordX === null || coordY === null || coordX < 0 || coordY < 0 || coordX >= level.sizeX || coordY >= level.sizeY) return; // skip out of bounds
     if (unitClass) {
-      this.previewUnitSprite.setPosition(coordX * GRID, coordY * GRID + HALF_GRID);
+      this.previewUnitSprite.setPosition(coordX * GRID - GRID, coordY * GRID + HALF_GRID);
       if (this.previewUnitClass && this.previewUnitClass !== unitClass) this.previewCancel();
       this.previewUnitSprite.setTexture(unitClass.unitName).setVisible(true);
       this.previewUnitClass = unitClass;

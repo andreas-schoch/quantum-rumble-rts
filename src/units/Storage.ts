@@ -24,16 +24,14 @@ export class Storage extends BaseStructure {
 
   static generateTextures(scene: Phaser.Scene) {
     const graphics = scene.add.graphics();
-    const outer = GRID * 0.30;
-    const inner = outer / 2;
     graphics.fillStyle(0x187f18, 1);
     graphics.lineStyle(2, 0x000000, 1);
-    graphics.fillCircle(HALF_GRID, HALF_GRID, outer);
-    graphics.strokeCircle(HALF_GRID, HALF_GRID, outer);
+    graphics.fillCircle(HALF_GRID * 3, HALF_GRID * 3, HALF_GRID * 2);
+    graphics.strokeCircle(HALF_GRID * 3, HALF_GRID * 3, GRID - 1);
     graphics.fillStyle(0x777777, 1);
-    graphics.fillCircle(HALF_GRID, HALF_GRID, inner);
-    graphics.strokeCircle(HALF_GRID, HALF_GRID, inner);
-    graphics.generateTexture(Storage.unitName, GRID, GRID);
+    graphics.fillCircle(HALF_GRID * 3, HALF_GRID * 3, HALF_GRID * 1);
+    graphics.strokeCircle(HALF_GRID * 3, HALF_GRID * 3, HALF_GRID * 1);
+    graphics.generateTexture(Storage.unitName, GRID * 3, GRID * 3);
     graphics.destroy();
   }
 }

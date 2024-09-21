@@ -6,6 +6,11 @@ const dev = {
   devtool: 'inline-source-map',
   devServer: {
     open: true,
+    headers: {
+      // These headers are needed to be able to use SharedArrayBuffer
+      'Cross-Origin-Opener-Policy': 'same-origin',
+      'Cross-Origin-Embedder-Policy': 'require-corp',
+    },
   },
 };
 

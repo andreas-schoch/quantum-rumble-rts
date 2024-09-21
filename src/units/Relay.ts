@@ -8,7 +8,7 @@ export class Relay extends BaseStructure {
   static buildCost = 20;
   static isRelay = true;
   static movable = false;
-  static connectionRange = 13;
+  static connectionRange = 19;
   static energyCollectionRange = 0;
   static energyCollectionRate = 0;
   static energyProduction = 0;
@@ -26,10 +26,10 @@ export class Relay extends BaseStructure {
     const graphics = scene.add.graphics();
     graphics.fillStyle(0xd3d3d3, 1);
     graphics.lineStyle(2, 0x000000, 1);
-    drawStar(graphics, HALF_GRID, HALF_GRID * 1.15, 3, GRID * 0.4, GRID * 0.2);
+    drawStar(graphics, HALF_GRID * 3, HALF_GRID * 3 * 1.15, 3, GRID * 0.4 * 3, GRID * 0.2 * 3);
     graphics.fillStyle(0xffffff, 1);
-    drawStar(graphics, HALF_GRID, HALF_GRID * 1.15, 3, GRID * 0.2, GRID * 0.1);
-    graphics.generateTexture(Relay.unitName, GRID, GRID);
+    drawStar(graphics, HALF_GRID * 3, HALF_GRID * 3 * 1.15, 3, GRID * 0.2 * 3, GRID * 0.1 * 3);
+    graphics.generateTexture(Relay.unitName, GRID * 3, GRID * 3);
     graphics.destroy();
   }
 }
