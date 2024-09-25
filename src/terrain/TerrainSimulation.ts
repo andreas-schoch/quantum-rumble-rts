@@ -2,15 +2,16 @@ import { NoiseFunction2D, createNoise2D } from 'simplex-noise';
 import { config, FLOW_DISABLED, level, THRESHOLD } from '../constants';
 
 const size = (level.sizeX + 1) * (level.sizeY + 1) * Uint16Array.BYTES_PER_ELEMENT;
-const sharedPrevFluidBuffer = new SharedArrayBuffer(size);
-const sharedFluidBuffer = new SharedArrayBuffer(size);
-const sharedTerrainBuffer = new SharedArrayBuffer(size);
-const sharedCollectionBuffer = new SharedArrayBuffer(size);
 
-export const prevFluidData = new Uint16Array(sharedPrevFluidBuffer); // for double buffering to avoid changing flow based on values that were already changed in current cycle
-export const fluidData = new Uint16Array(sharedFluidBuffer);
-export const terrainData = new Uint16Array(sharedTerrainBuffer);
-export const collectionData = new Uint16Array(sharedCollectionBuffer);
+const prevFluidBuffer = new ArrayBuffer(size);
+const fluidBuffer = new ArrayBuffer(size);
+const terrainBuffer = new ArrayBuffer(size);
+const collectionBuffer = new ArrayBuffer(size);
+
+export const prevFluidData = new Uint16Array(prevFluidBuffer); // for double buffering to avoid changing flow based on values that were already changed in current cycle
+export const fluidData = new Uint16Array(fluidBuffer);
+export const terrainData = new Uint16Array(terrainBuffer);
+export const collectionData = new Uint16Array(collectionBuffer);
 
 export interface CollectionInfo {
   id: string;
@@ -31,8 +32,6 @@ export class TerrainSimulation {
 
   constructor() {
     const {elevationMax} = config.terrain;
-    console.log('simulation init');
-
     const divider = level.noise.filter(n => !n.subtract).length;
 
     for (let y = 0; y <= level.sizeY; y++) {
@@ -102,6 +101,7 @@ export class TerrainSimulation {
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   tick(tickCounter: number) {
+    // console.time('terrain simulation tick');
     if (FLOW_DISABLED) return;
     // console.time('terrain simulation tick');
     const {flowRate, overflow} = config.fluid;
@@ -172,5 +172,7 @@ export class TerrainSimulation {
 
     const totalFluidAfter = fluidData.reduce((acc, cur) => acc + cur, 0);
     console.assert(totalFluid === (totalFluidAfter), 'loss of density due to adding or subtracting fractions to uint16array');
+    // console.timeEnd('terrain simulation tick');
   }
+
 }

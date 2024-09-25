@@ -42,7 +42,7 @@ export default class GameUIScene extends Scene {
     const unitTemplate: HTMLTemplateElement | null = document.getElementById('unit-template') as HTMLTemplateElement;
     UNIT_CLASSES.forEach((unit, i) => {
       const clone = unitTemplate.content.cloneNode(true) as HTMLElement;
-      (clone.querySelector('.unit-img') as HTMLImageElement).src = this.textures.getBase64(unit.name) || this.textures.getBase64(Collector.name);
+      (clone.querySelector('.unit-img') as HTMLImageElement).src = this.textures.getBase64(unit.unitName) || this.textures.getBase64(Collector.unitName);
       clone.querySelector('.unit')!.id = unit.unitName;
       clone.querySelector('.unit-name')!.innerHTML = unit.unitName;
       clone.querySelector('.unit-cost')!.innerHTML = String(unit.buildCost);

@@ -18,7 +18,7 @@ export const FLOW_DISABLED = false;
 export const DEBUG = {
   showFps: true,
   showFluidDensityText: false
-}
+};
 
 export const SPACE_BETWEEN = 4; // space between generated texture frames
 export const GRID = 16;

@@ -5,9 +5,7 @@ import { Network } from '../Network';
 import { BaseStructure } from '../units/BaseUnit';
 import { TerrainRenderer as TerrainRenderer } from '../terrain/Terrain';
 import { EmitterManager } from '../Emitter';
-import { wrap, Remote } from 'comlink';
-import SimulationWorker from 'worker-loader!../workers/simulation.worker.ts';
-import { TerrainSimulation } from '../terrain/TerrainSimulation.js';
+import { TerrainSimulation } from '../terrain/TerrainSimulation';
 import { Tilemaps } from 'phaser';
 
 export default class GameScene extends Phaser.Scene {
@@ -25,7 +23,8 @@ export default class GameScene extends Phaser.Scene {
   tickCounter: number;
   terrain: TerrainRenderer;
   private selectedUnitClass: Unit | null;
-  simulation: Remote<TerrainSimulation>;
+  // simulation: Remote<TerrainSimulation>;
+  simulation: TerrainSimulation;
   emitterManager: EmitterManager;
   tilemap: Tilemaps.Tilemap;
   tileset: Tilemaps.Tileset | null;
@@ -59,36 +58,34 @@ export default class GameScene extends Phaser.Scene {
 
     this.city = new City(this, Math.floor(level.cityCoords.x), Math.floor(level.cityCoords.y));
     this.network.placeUnit(this.city.coordX, this.city.coordY, this.city);
-    this.simulation = wrap(new SimulationWorker());
-    this.simulation.getData().then(({terrainData, fluidData, collectionData}) => {
-      this.terrain = new TerrainRenderer(this, terrainData, fluidData, collectionData);
+    this.simulation = new TerrainSimulation();
+    const {terrainData, fluidData, collectionData} = this.simulation.getData();
+    this.terrain = new TerrainRenderer(this, terrainData, fluidData, collectionData);
 
-      this.emitterManager = new EmitterManager(this);
+    this.emitterManager = new EmitterManager(this);
 
-      level.emitters.forEach(em => this.emitterManager.addEmitter(em));
-      this.emitterManager.onemit = async (xCoord, yCoord, amount, pattern) => await this.simulation.fluidChangeRequest(xCoord, yCoord, amount, pattern);
+    level.emitters.forEach(em => this.emitterManager.addEmitter(em));
+    this.emitterManager.onemit = async (xCoord, yCoord, amount, pattern) => await this.simulation.fluidChangeRequest(xCoord, yCoord, amount, pattern);
 
-      this.tickCounter = 0;
-      // Only rendering related things should happen every frame. I potentially want to be able to simulate this game on a server, so it needs to be somewhat deterministic
-      this.time.addEvent({
-        delay: TICK_RATE,
-        timeScale: 1,
-        callback: () => {
-          if (this.isPaused) return;
-          this.tickCounter++;
-          this.simulation.tick(this.tickCounter).then(() => {
-            this.emitterManager.tick(this.tickCounter);
-            this.terrain.tick(this.tickCounter);
-            this.network.tick(this.tickCounter);
-            for(const structure of BaseStructure.structuresInUpdatePriorityOrder) structure.tick(this.tickCounter);
-          });
-        },
-        callbackScope: this,
-        loop: true
-      });
-
-      this.observer.on(EVENT_UNIT_SELECTION_CHANGE, (unitIndex: number) => this.selectUnit(unitIndex, false));
+    this.tickCounter = 0;
+    // Only rendering related things should happen every frame. I potentially want to be able to simulate this game on a server, so it needs to be somewhat deterministic
+    this.time.addEvent({
+      delay: TICK_RATE,
+      timeScale: 1,
+      callback: () => {
+        if (this.isPaused) return;
+        this.tickCounter++;
+        this.simulation.tick(this.tickCounter);
+        this.emitterManager.tick(this.tickCounter);
+        this.terrain.tick(this.tickCounter);
+        this.network.tick(this.tickCounter);
+        for(const structure of BaseStructure.structuresInUpdatePriorityOrder) structure.tick(this.tickCounter);
+      },
+      callbackScope: this,
+      loop: true
     });
+
+    this.observer.on(EVENT_UNIT_SELECTION_CHANGE, (unitIndex: number) => this.selectUnit(unitIndex, false));
   }
 
   update(time: number, delta: number) {

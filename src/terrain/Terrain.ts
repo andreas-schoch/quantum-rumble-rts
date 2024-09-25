@@ -56,7 +56,7 @@ export class TerrainRenderer {
   }
 
   private renderTerrain() {
-    console.time('renderTerrain');
+    // console.time('renderTerrain');
     // BOTTOM LAYER
     const graphics = this.scene.add.graphics().setDepth(1);
     const BASE_TERRAIN_COLOR = 0x544741;
@@ -95,7 +95,7 @@ export class TerrainRenderer {
 
     this.renderTexture.endDraw();
     graphics.destroy();
-    console.timeEnd('renderTerrain');
+    // console.timeEnd('renderTerrain');
 
     // graphics = this.scene.add.graphics().setDepth(config.terrainLayers.at(-1)?.depth || 0);
     // graphics.fillStyle(0x333333, 1); // matching camera background
@@ -181,7 +181,7 @@ export class TerrainRenderer {
   // }
 
   private renderFluid(): void {
-    console.time('fluid rendering');
+    // console.time('fluid rendering');
     this.renderTextureFluid.clear();
     this.renderTextureFluid.beginDraw();
     const bounds = getVisibleBounds(this.scene);
@@ -204,7 +204,6 @@ export class TerrainRenderer {
         const indexBL = indexTL + rowOffset;
         const indexTR = indexTL + 1;
         const indexBR = indexBL + 1;
-
 
         const fluidTL = fluid[indexTL];
         const fluidTR = fluid[indexTR];
@@ -235,7 +234,7 @@ export class TerrainRenderer {
       }
     }
     this.renderTextureFluid.endDraw();
-    console.timeEnd('fluid rendering');
+    // console.timeEnd('fluid rendering');
   }
 
   private renderAt(x: number, y: number, densityData: DensityData, threshold,  graphics: GameObjects.Graphics, renderLines = true): void {
