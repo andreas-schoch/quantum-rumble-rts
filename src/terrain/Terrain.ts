@@ -1,26 +1,32 @@
 import { DensityData, MarchingSquares } from './MarchingSquares';
 
-import { config, GRID, level, THRESHOLD } from '../constants';
-import { GameObjects, Scene } from 'phaser';
-import GameScene from '../scenes/GameScene.js';
+import { config, DEBUG, FLOW_DISABLED, GRID, level, SPACE_BETWEEN, THRESHOLD } from '../constants';
+import { GameObjects } from 'phaser';
+import GameScene from '../scenes/GameScene';
+import { getVisibleBounds } from '../util';
 
-// Reusing the same objects to minimize Garbage Collection
-const densityDataTerrainAbove: DensityData = [0, 0, 0, 0];
-// const densityDataFluidAbove: DensityData = [0, 0, 0, 0];
+// Reusing the same object to minimize Garbage Collection
+const densityData: DensityData = [0, 0, 0, 0];
 const densityDataTerrain: DensityData = [0, 0, 0, 0];
-const densityDataFluid: DensityData = [0, 0, 0, 0];
 
 export class TerrainRenderer {
-  private readonly scene: Scene;
-  private readonly terrainGraphics: Map<number, GameObjects.Graphics> = new Map();
-  private readonly marchingSquares: MarchingSquares;
+  private readonly scene: GameScene;
+  // private readonly terrainGraphics: Map<number, GameObjects.Graphics> = new Map();
+  readonly marchingSquares: MarchingSquares;
   private texts: GameObjects.Text[];
+  private fluidToTerrainAbove: Record<number, number> = {};
+  private renderTexture: Phaser.GameObjects.RenderTexture;
+  private renderTextureFluid: Phaser.GameObjects.RenderTexture;
+  private previousShapes: Uint8ClampedArray;
 
-  constructor(scene: GameScene, private readonly terrainData: Uint16Array, private readonly fluidData: Uint16Array) {
+  constructor(scene: GameScene, private readonly terrainData: Uint16Array, private readonly fluidData: Uint16Array, private readonly collectionData: Uint16Array) {
     this.scene = scene;
-    this.marchingSquares = new MarchingSquares({ squareSize: GRID });
-    this.initTerrain();
-    config.fluidLayerThresholds.forEach(({elevation, depth, color, alpha}) => this.terrainGraphics.set(elevation, this.scene.add.graphics().setAlpha(1).setDepth(depth).fillStyle(color, alpha)));
+
+    this.marchingSquares = new MarchingSquares();
+    this.renderTexture = this.scene.make.renderTexture({x: 0, y: 0, width: level.sizeX * GRID, height: level.sizeY * GRID}, true).setDepth(1).setOrigin(0, 0);
+    this.renderTextureFluid = this.scene.make.renderTexture({x: 0, y: 0, width: level.sizeX * GRID, height: level.sizeY * GRID}, true).setDepth(2).setOrigin(0, 0);
+    // config.fluidLayers.forEach(({elevation, depth, color, alpha}) => this.terrainGraphics.set(elevation, this.scene.add.graphics().setAlpha(1).setDepth(depth).fillStyle(color, alpha)));
+    // this.collectionGraphics = this.scene.add.graphics().setDepth(10000).fillStyle(0x000000, 1);
 
     // this.texts = Array.from({ length: (level.sizeX + 1) * (level.sizeY + 1) }, () => scene.add.text(0, 0, '', { fontSize: '12px', color: '#000' }).setDepth(10000));
     // for (let y = 0; y <= level.sizeY; y++) {
@@ -31,108 +37,212 @@ export class TerrainRenderer {
     //     this.texts[indexCenter].setText(value.toString());
     //   }
     // }
+
+    const terrainThickness = THRESHOLD * 3;
+    for (const fluidLayer of config.fluidLayers) {
+      const floored = Math.floor(fluidLayer.elevation / terrainThickness) * terrainThickness;
+      this.fluidToTerrainAbove[fluidLayer.elevation] = floored + terrainThickness;
+    }
+
+    this.generateLayers();
+    this.renderTerrain();
   }
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   tick(tickCounter: number) {
-    console.time('terrain rendering');
-    const bounds = this.getVisibleBounds();
-    if (!bounds) return;
-
-    const endY = bounds.coordY + bounds.numCoordsY;
-    const endX = bounds.coordX + bounds.numCoordsX;
-
-    for (const conf of config.fluidLayerThresholds) {
-      const g = this.terrainGraphics.get(conf.elevation);
-      if (!g) throw new Error('no graphics');
-      g.clear().fillStyle(conf.color, conf.alpha);
-      for (let y = bounds.coordY; y <= endY; y++) {
-        for (let x = bounds.coordX; x <= endX; x++) {
-          if (x < 0 || y < 0 || x >= level.sizeX || y >= level.sizeY) continue;
-          this.renderFluidAt(x, y, conf.elevation, g);
-        }
-      }
-    }
-    console.timeEnd('terrain rendering');
-
-    // for (let y = 0; y <= level.sizeY; y++) {
-    //   for (let x = 0; x <= level.sizeX; x++) {
-    //     const indexCenter = y * (level.sizeX + 1) + x;
-    //     const value = this.fluidData[indexCenter];
-    //     this.texts[indexCenter].setText(value.toString());
-    //   }
-    // }
+    if (FLOW_DISABLED) return;
+    this.renderFluid();
+    if (DEBUG.showFluidDensityText) this.renderDebug();
   }
 
-  private initTerrain() {
-    // TODO find more optimal way to display terrain. Static render textures have HORRIBLE performance when creeper graphics is underflowing it.
+  private renderTerrain() {
+    console.time('renderTerrain');
     // BOTTOM LAYER
-    let graphics = this.scene.add.graphics().setDepth(1);
-    // graphics.setBlendMode(Phaser.BlendModes.OVERLAY);
+    const graphics = this.scene.add.graphics().setDepth(1);
     const BASE_TERRAIN_COLOR = 0x544741;
     graphics.fillStyle(BASE_TERRAIN_COLOR, 1);
     graphics.fillRect(0, 0, level.sizeX * GRID, level.sizeY * GRID);
     // ELEVATION LAYERS
-    for (const { elevation: threshold, color, depth} of config.terrainLayers) {
-      graphics = this.scene.add.graphics().setDepth(depth);
-      graphics.lineStyle(2, 0x000000).fillStyle(color, 1); // .setAlpha(0.5);
+    this.renderTexture.beginDraw();
+    this.renderTexture.batchDraw(graphics, 0, 0, 1);
+    for (const { elevation, color, depth} of config.terrainLayers) {
+      // const layer = this.scene.tilemap.getLayer('terrain_' + elevation);
+      // if (!layer) throw new Error('layer is null');
+      // graphics = this.scene.add.graphics().setDepth(depth);
+      // graphics.lineStyle(2, 0x000000).fillStyle(color, 1); // .setAlpha(0.5);
       for (let y = 0; y < level.sizeY; y++) {
         for (let x = 0; x < level.sizeX; x++) {
-          this.renderTerrainAt(x, y, threshold, graphics, 0, 0);
+          const indexTL = y * (level.sizeX + 1) + x;
+          const indexBL = indexTL + level.sizeX + 1;
+          const indexTR = indexTL + 1;
+          const indexBR = indexBL + 1;
+
+          densityData[0] = this.terrainData[indexTL];
+          densityData[1] = this.terrainData[indexTR];
+          densityData[2] = this.terrainData[indexBR];
+          densityData[3] = this.terrainData[indexBL];
+
+          const shapeIndexAbove = this.marchingSquares.getShapeIndex(densityData, elevation + (THRESHOLD * 3));
+          if (shapeIndexAbove === 15) continue; // prevent drawing invisible terrain
+
+          const shape = this.marchingSquares.getShapeIndex(densityData, elevation);
+          // layer.tilemapLayer.putTileAt(shape, x, y, false);
+          // this.renderAt(x * GRID, y * GRID, densityData, elevation, graphics);
+          this.renderTexture.batchDrawFrame('terrain_' + elevation, shape, x * GRID, y * GRID, 1);
         }
       }
     }
-    graphics = this.scene.add.graphics().setDepth(config.terrainLayers.at(-1)?.depth || 0);
-    graphics.fillStyle(0x333333, 1); // matching camera background
-    graphics.fillRect(0, level.sizeY * GRID, level.sizeX * GRID, GRID).setDepth(config.terrainLayers.at(-1)?.depth || 0);
-    graphics.fillRect(level.sizeX * GRID, 0, GRID,level.sizeY * GRID + GRID).setDepth(config.terrainLayers.at(-1)?.depth || 0);
+
+    this.renderTexture.endDraw();
+    graphics.destroy();
+    console.timeEnd('renderTerrain');
+
+    // graphics = this.scene.add.graphics().setDepth(config.terrainLayers.at(-1)?.depth || 0);
+    // graphics.fillStyle(0x333333, 1); // matching camera background
+    // graphics.fillRect(0, level.sizeY * GRID, level.sizeX * GRID, GRID).setDepth(config.terrainLayers.at(-1)?.depth || 0);
+    // graphics.fillRect(level.sizeX * GRID, 0, GRID,level.sizeY * GRID + GRID).setDepth(config.terrainLayers.at(-1)?.depth || 0);
   }
 
-  private getVisibleBounds(): CoordBounds | null {
-    const { x, y, width, height } = this.scene.cameras.main.worldView;
+  // Alternative way to render using tilemap. Keeping it for now. Probably gonna get removed as render texture and even graphics seem better for my usecase
+  // private renderFluid(): void {
+  //   console.time('fluid rendering');
+  //   this.renderTextureFluid.clear();
+  //   this.renderTextureFluid.beginDraw();
+  //   const bounds = getVisibleBounds(this.scene);
+  //   if (!bounds) return;
 
-    const MAX_WIDTH = level.sizeX * GRID;
-    const offsetLeftX = x < 0 ? Math.abs(x) : 0;
-    const offsetRightX = (width + x) > MAX_WIDTH ? width + x - MAX_WIDTH : 0;
-    const numCoordsX = Phaser.Math.Clamp(Math.floor((width - offsetLeftX - offsetRightX) / GRID), 0, level.sizeX - 1) + 2;
-    if (numCoordsX <= 0) return null;
+  //   // reduce the amount of rendering by only rendering the visible area
+  //   const startX = Math.max(bounds.coordX, 0);
+  //   const startY = Math.max(bounds.coordY, 0);
+  //   const endY = Math.min(bounds.coordY + bounds.numCoordsY, level.sizeY);
+  //   const endX = Math.min(bounds.coordX + bounds.numCoordsX, level.sizeX);
 
-    const MAX_HEIGHT = level.sizeY * GRID;
-    const offsetLeftY = y < 0 ? Math.abs(y) : 0;
-    const offsetRightY = (height + y) > MAX_HEIGHT ? height + y - MAX_HEIGHT : 0;
-    const numCoordsY = Phaser.Math.Clamp(Math.floor((height - offsetLeftY - offsetRightY) / GRID), 0, level.sizeY - 1) + 2;
-    if (numCoordsY <= 0) return null;
+  //   const fluid = this.fluidData;
+  //   const terrain = this.terrainData;
+  //   const prev = this.previousShapes;
+  //   const rowOffset = level.sizeX + 1;
 
-    const coordX = Phaser.Math.Clamp(Math.floor(x / GRID) - 1, 0, level.sizeX - 1);
-    const coordY = Phaser.Math.Clamp(Math.floor(y / GRID) - 1, 0, level.sizeY - 1);
-    return { coordX, coordY, numCoordsX, numCoordsY };
-  }
+  //   for (const {color, alpha, elevation} of config.fluidLayers) {
+  //     // const layerData = this.scene.tilemap.getLayer('fluid_' + elevation);
+  //     // if (!layerData) throw new Error('layer is null');
+  //     // const layer = layerData.tilemapLayer;
+  //     // const terrainThresholdAbove = this.fluidToTerrainAbove[elevation];
+  //     // const layerGraphics = this.terrainGraphics.get(elevation);
+  //     // if (!layerGraphics) throw new Error('no graphics');
+  //     // layerGraphics.clear().fillStyle(color, alpha);
 
-  private renderTerrainAt(x: number, y: number, threshold: number, graphics: Phaser.GameObjects.Graphics, offsetX = 0, offsetY = 0): void {
-    this.setDensityData(x, y, densityDataTerrainAbove);
+  //     for (let y = startY; y <= endY; y++) {
+  //       for (let x = startX; x <= endX; x++) {
+  //         const indexTL = y * rowOffset + x;
+  //         const indexBL = indexTL + rowOffset;
+  //         const indexTR = indexTL + 1;
+  //         const indexBR = indexBL + 1;
 
-    const shapeIndexAbove = this.marchingSquares.getShapeIndex(densityDataTerrainAbove, threshold + (THRESHOLD * 3));
-    if (shapeIndexAbove === 15) return; // prevent drawing invisible terrain
+  //         const fluidTL = fluid[indexTL];
+  //         const fluidTR = fluid[indexTR];
+  //         const fluidBR = fluid[indexBR];
+  //         const fluidBL = fluid[indexBL];
 
-    const posX = x * GRID + offsetX;
-    const posY = y * GRID + offsetY;
-    this.setDensityData(x, y, densityDataTerrain);
-    this.renderAt(posX, posY, densityDataTerrain, threshold, graphics);
-  }
+  //         densityData[0] = (fluidTL >= THRESHOLD) ? fluidTL + terrain[indexTL] : fluidTL;
+  //         densityData[1] = (fluidTR >= THRESHOLD) ? fluidTR + terrain[indexTR] : fluidTR;
+  //         densityData[2] = (fluidBR >= THRESHOLD) ? fluidBR + terrain[indexBR] : fluidBR;
+  //         densityData[3] = (fluidBL >= THRESHOLD) ? fluidBL + terrain[indexBL] : fluidBL;
+  //         const shape = this.marchingSquares.getShapeIndex(densityData, elevation);
 
-  private renderFluidAt(x: number, y: number, threshold: number, graphics: Phaser.GameObjects.Graphics): void {
-    this.setDensityData(x, y, densityDataTerrain, densityDataFluid);
-    if (densityDataFluid[0] >= THRESHOLD) densityDataFluid[0] += densityDataTerrain[0];
-    if (densityDataFluid[1] >= THRESHOLD) densityDataFluid[1] += densityDataTerrain[1];
-    if (densityDataFluid[2] >= THRESHOLD) densityDataFluid[2] += densityDataTerrain[2];
-    if (densityDataFluid[3] >= THRESHOLD) densityDataFluid[3] += densityDataTerrain[3];
-    this.renderAt(x * GRID, y * GRID, densityDataFluid, threshold, graphics, true);
+  //         if (shape === 0) continue;
+  //         this.renderTextureFluid.batchDrawFrame('fluid_' + elevation, shape, x * GRID, y * GRID);
+
+  //         // // const shapeIndexAbove = this.marchingSquares.getShapeIndex(densityData, elevation + (THRESHOLD * 3));
+  //         // // if (shapeIndexAbove === 15) {
+  //         // //   layer.removeTileAt(x, y, true, false);
+  //         // //   continue;
+  //         // // }
+  //         // const tile = layer.getTileAt(x, y);
+  //         // if (tile && tile.index === shape) continue;
+  //         // densityData[0] = terrain[indexTL];
+  //         // densityData[1] = terrain[indexTR];
+  //         // densityData[2] = terrain[indexBR];
+  //         // densityData[3] = terrain[indexBL];
+  //         // const shapeTerrainAbove = this.marchingSquares.getShapeIndex(densityData, terrainThresholdAbove);
+  //         // if (shapeTerrainAbove === 15) {
+  //         //   layer.removeTileAt(x, y, true, false);
+  //         //   continue;
+  //         // }
+  //         // // IMPORTANT: for removeTileAt() keep "replaceWithNull" param true. Otherwise slower and uses more memory
+  //         // if (shape === 0) layer.removeTileAt(x, y, true, false);
+  //         // else layer.putTileAt(shape, x, y, false);
+
+  //         // this.renderAt(x * GRID, y * GRID, densityData, elevation, layerGraphics, true);
+  //       }
+  //     }
+  //   }
+  //   this.renderTextureFluid.endDraw();
+  //   console.timeEnd('fluid rendering');
+  // }
+
+  private renderFluid(): void {
+    console.time('fluid rendering');
+    this.renderTextureFluid.clear();
+    this.renderTextureFluid.beginDraw();
+    const bounds = getVisibleBounds(this.scene);
+    if (!bounds) return;
+
+    // reduce the amount of rendering by only rendering the visible area
+    const startX = Math.max(bounds.coordX, 0);
+    const startY = Math.max(bounds.coordY, 0);
+    const endY = Math.min(bounds.coordY + bounds.numCoordsY, level.sizeY);
+    const endX = Math.min(bounds.coordX + bounds.numCoordsX, level.sizeX);
+
+    const fluid = this.fluidData;
+    const terrain = this.terrainData;
+    const prev = this.previousShapes;
+    const rowOffset = level.sizeX + 1;
+
+    for (let y = startY; y <= endY; y++) {
+      for (let x = startX; x <= endX; x++) {
+        const indexTL = y * rowOffset + x;
+        const indexBL = indexTL + rowOffset;
+        const indexTR = indexTL + 1;
+        const indexBR = indexBL + 1;
+
+
+        const fluidTL = fluid[indexTL];
+        const fluidTR = fluid[indexTR];
+        const fluidBR = fluid[indexBR];
+        const fluidBL = fluid[indexBL];
+
+        densityData[0] = (fluidTL >= THRESHOLD) ? fluidTL + terrain[indexTL] : fluidTL;
+        densityData[1] = (fluidTR >= THRESHOLD) ? fluidTR + terrain[indexTR] : fluidTR;
+        densityData[2] = (fluidBR >= THRESHOLD) ? fluidBR + terrain[indexBR] : fluidBR;
+        densityData[3] = (fluidBL >= THRESHOLD) ? fluidBL + terrain[indexBL] : fluidBL;
+
+        densityDataTerrain[0] = terrain[indexTL];
+        densityDataTerrain[1] = terrain[indexTR];
+        densityDataTerrain[2] = terrain[indexBR];
+        densityDataTerrain[3] = terrain[indexBL];
+
+        const posX = x * GRID;
+        const posY = y * GRID;
+
+        for (const {color, alpha, elevation} of config.fluidLayers) {
+          const shape = this.marchingSquares.getShapeIndex(densityData, elevation);
+          if (shape === 0) break;
+
+          const shapeTerrainAbove = this.marchingSquares.getShapeIndex(densityDataTerrain, this.fluidToTerrainAbove[elevation]);
+          if (shapeTerrainAbove === 15) continue;
+          this.renderTextureFluid.batchDrawFrame('fluid_' + elevation, shape, posX, posY);
+        }
+      }
+    }
+    this.renderTextureFluid.endDraw();
+    console.timeEnd('fluid rendering');
   }
 
   private renderAt(x: number, y: number, densityData: DensityData, threshold,  graphics: GameObjects.Graphics, renderLines = true): void {
-    const { polygons, isoLines, shapeIndex } = this.marchingSquares.getSquareGeomData(densityData, threshold);
+    const { polygons, isoLines, index: shapeIndex } = this.marchingSquares.getSquareGeomData(densityData, threshold);
 
     if (shapeIndex === 0) return; // not drawing empty square
+    // if (shapeIndex === 15) return;
 
     graphics.translateCanvas(x, y);
     if (shapeIndex === 15) {
@@ -144,32 +254,89 @@ export class TerrainRenderer {
     graphics.translateCanvas(-x, -y);
   }
 
-  private setDensityData(x: number, y: number, outTerrain: DensityData, outFluid?: DensityData) {
-    const indexTL = y * (level.sizeX + 1) + x;
-    const indexBL = indexTL + level.sizeX + 1;
-    const indexTR = indexTL + 1;
-    const indexBR = indexBL + 1;
+  private generateLayers() {
 
-    outTerrain[0] = this.terrainData[indexTL];
-    outTerrain[1] = this.terrainData[indexTR];
-    outTerrain[2] = this.terrainData[indexBR];
-    outTerrain[3] = this.terrainData[indexBL];
+    // TERRAIN
+    for (const {elevation, depth, color} of config.terrainLayers) {
+      const key = 'terrain_' + elevation;
+      this.generateTexture(key, color, 4, SPACE_BETWEEN);
+      // const tileset = this.scene.tilemap.addTilesetImage(key, key, GRID, GRID, 0, SPACE_BETWEEN, 0);
+      // if (!tileset) throw new Error('tileset is null');
 
-    if (!outFluid) return;
-    outFluid[0] = this.fluidData[indexTL];
-    outFluid[1] = this.fluidData[indexTR];
-    outFluid[2] = this.fluidData[indexBR];
-    outFluid[3] = this.fluidData[indexBL];
+      // const layer = this.scene.tilemap.createBlankLayer(key, tileset);
+      // if (!layer) throw new Error('layer is null');
+      // layer.setDepth(depth);
+    }
+
+    // FLUID
+    for (const {elevation, depth, color, alpha} of config.fluidLayers) {
+      const name = 'fluid_' + elevation;
+      this.generateTexture(name, 0x4081b7, 0.4, SPACE_BETWEEN);
+      // const tileset = this.scene.tilemap.addTilesetImage(name, name, GRID, GRID, 0, SPACE_BETWEEN, 0);
+      // if (!tileset) throw new Error('tileset is null');
+
+      // const layer = this.scene.tilemap.createBlankLayer(name, tileset);
+      // if (!layer) throw new Error('layer is null');
+      // layer.setDepth(depth);
+    }
   }
 
-  private isWithinBounds(x: number, y: number): boolean {
-    return x >= 0 && y >= 0 && x < level.sizeX && y < level.sizeY;
-  }
-}
+  private generateTexture(key: string, color: number, alpha: number = 1, spaceBetween: number = 2) {
+    const graphics = this.scene.add.graphics().fillStyle(color, alpha);
 
-export interface CoordBounds {
-  coordX: number;
-  coordY: number;
-  numCoordsX: number;
-  numCoordsY: number;
+    for (let y = 0; y < 4; y++) {
+      for (let x = 0; x < 4; x++) {
+        const shapeIndex = y * 4 + x;
+        const shape = this.marchingSquares.shapeByIndex[shapeIndex];
+        const offsetX = x * (GRID + spaceBetween);
+        const offsetY = y * (GRID + spaceBetween);
+        graphics.translateCanvas(offsetX, offsetY);
+        if (shapeIndex === 15) {
+          graphics.fillRect(0, 0, GRID, GRID);
+        } else {
+          for (const points of shape.polygons) graphics.fillPoints(points, true);
+          for (const { p1, p2, c, lw } of shape.isoLines) graphics.lineStyle(lw, c).lineBetween(p1.x, p1.y, p2.x, p2.y);
+        }
+        graphics.translateCanvas(-offsetX, -offsetY);
+      }
+    }
+
+    const size = (GRID * 4) + (3 * spaceBetween);
+    graphics.generateTexture(key, size, size);
+    graphics.destroy();
+
+    // Add all marching square shapes as frames to the texture
+    const texture = this.scene.textures.get(key);
+    for (let y = 0; y < 4; y++) {
+      for (let x = 0; x < 4; x++) {
+        const shapeIndex = y * 4 + x;
+        const offsetX = x * (GRID + SPACE_BETWEEN);
+        const offsetY = y * (GRID + SPACE_BETWEEN);
+        texture.add(shapeIndex, 0, offsetX, offsetY, GRID, GRID);
+      }
+    }
+
+  }
+
+  private renderDebug() {
+    if (!this.texts) {
+      this.texts = Array.from({ length: (level.sizeX + 1) * (level.sizeY + 1) }, () => this.scene.add.text(0, 0, '', { fontSize: '12px', color: '#000' }).setDepth(10000));
+      for (let y = 0; y <= level.sizeY; y++) {
+        for (let x = 0; x <= level.sizeX; x++) {
+          const indexCenter = y * (level.sizeX + 1) + x;
+          const value = this.fluidData[indexCenter];
+          this.texts[indexCenter].setPosition(x * GRID, y * GRID);
+          this.texts[indexCenter].setText(value.toString());
+        }
+      }
+    }
+
+    for (let y = 0; y <= level.sizeY; y++) {
+      for (let x = 0; x <= level.sizeX; x++) {
+        const indexCenter = y * (level.sizeX + 1) + x;
+        const value = this.fluidData[indexCenter];
+        this.texts[indexCenter].setText(value.toString());
+      }
+    }
+  }
 }

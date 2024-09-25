@@ -17,8 +17,6 @@ export class Network {
   textureKeysEdge: Set<string> = new Set();
   root: City | null = null;
 
-  // TODO this can be used to determine which structure collects the energy depending on their distance to the cell (equal if same distance)
-  //  For enemies, it can be used to determine weather they can place a collector or not (if enemy structure in array, cannot place)
   collectionMap: Map<string, [BaseStructure[], Phaser.GameObjects.Sprite | undefined]> = new Map();
   collectionSpriteSet: Set<Phaser.GameObjects.Sprite> = new Set();
 

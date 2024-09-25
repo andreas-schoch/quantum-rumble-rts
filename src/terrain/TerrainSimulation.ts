@@ -1,14 +1,23 @@
 import { NoiseFunction2D, createNoise2D } from 'simplex-noise';
 import { config, FLOW_DISABLED, level, THRESHOLD } from '../constants';
 
-const size = (level.sizeX + 1) * (level.sizeY + 1);
-const sharedPrevFluidBuffer = new SharedArrayBuffer(size * Uint16Array.BYTES_PER_ELEMENT);
-const sharedFluidBuffer = new SharedArrayBuffer(size * Uint16Array.BYTES_PER_ELEMENT);
-const sharedTerrainBuffer = new SharedArrayBuffer(size * Uint16Array.BYTES_PER_ELEMENT);
+const size = (level.sizeX + 1) * (level.sizeY + 1) * Uint16Array.BYTES_PER_ELEMENT;
+const sharedPrevFluidBuffer = new SharedArrayBuffer(size);
+const sharedFluidBuffer = new SharedArrayBuffer(size);
+const sharedTerrainBuffer = new SharedArrayBuffer(size);
+const sharedCollectionBuffer = new SharedArrayBuffer(size);
 
 export const prevFluidData = new Uint16Array(sharedPrevFluidBuffer); // for double buffering to avoid changing flow based on values that were already changed in current cycle
 export const fluidData = new Uint16Array(sharedFluidBuffer);
 export const terrainData = new Uint16Array(sharedTerrainBuffer);
+export const collectionData = new Uint16Array(sharedCollectionBuffer);
+
+export interface CollectionInfo {
+  id: string;
+  xCoord: number;
+  yCoord: number;
+  radius: number;
+}
 
 export class TerrainSimulation {
   private readonly flowNeighbours = [[1, 0], [-1, 0], [0, 1], [0, -1]];
@@ -17,6 +26,7 @@ export class TerrainSimulation {
   private readonly cellEdges = [[0, 0], [1, 0], [1, 1], [0, 1]]; // marching squares works on edges, while the rest of the game works on cells (consisting of 4 edges each)
   private readonly fluidChangeRequests: {xCoord: number, yCoord: number, amount: number}[] = [];
   private readonly noise: NoiseFunction2D = createNoise2D(() => level.seed);
+  private readonly collectors = new Map<CollectionInfo['id'], CollectionInfo>();
   emitters: []; // TODO move here. They are part of the simulation... change requests are only for changes in fluid by other things
 
   constructor() {
@@ -44,13 +54,39 @@ export class TerrainSimulation {
         terrainData[index] = n;
       }
     }
+
+    for (const rect of level.rects) {
+      for (let y = rect.y; y < rect.y + rect.h; y++) {
+        for (let x = rect.x; x < rect.x + rect.w; x++) {
+          const index = y * (level.sizeX + 1) + x;
+          terrainData[index] = rect.elevation;
+        }
+      }
+    }
   }
 
   // It seems that SharedArrayBuffer wouldn't be shared if I don't instantiate it within the worker. Not sure really...
   // It was probably because I had it exported in the index.ts and imported where needed.
   // I assume that if I somehow pass it as an argument to the worker it would also work (??)
   getData() {
-    return {terrainData, fluidData};
+    return {terrainData, fluidData, collectionData};
+  }
+
+  collectionChangeRequest(xCoord: number, yCoord: number, radius: number, id: string) {
+    this.collectors.set(id, {id, xCoord, yCoord, radius});
+
+    collectionData.fill(0);
+    for (const {xCoord, yCoord, radius} of this.collectors.values()) {
+      for (let y = -radius; y <= radius; y++) {
+        for (let x = -radius; x <= radius; x++) {
+          const distance = Math.sqrt(x * x + y * y);
+          if (distance <= radius) {
+            const index = (yCoord + y) * (level.sizeX + 1) + (xCoord + x);
+            collectionData[index] = 1;
+          }
+        }
+      }
+    }
   }
 
   fluidChangeRequest(xCoord: number, yCoord: number, totalChange: number, pattern: number[][] = [[0, 0]]) {

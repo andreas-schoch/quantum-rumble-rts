@@ -1,5 +1,5 @@
 import { GRID, HALF_GRID, TICK_DELTA } from './constants';
-import { drawStar } from './util/drawStar';
+import { drawStar } from './util';
 
 export class EmitterManager {
   scene: Phaser.Scene;

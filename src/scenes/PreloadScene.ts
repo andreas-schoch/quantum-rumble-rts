@@ -52,8 +52,8 @@ export default class PreloadScene extends Phaser.Scene {
     graphics.clear();
 
     // Energy Ball gray
-    const radius = 16;
-    const strokeWidth = 3;
+    const radius = GRID;
+    const strokeWidth = radius / 4;
     graphics.fillStyle(0x000000, 1);
     graphics.fillCircle(radius, radius, radius);
     graphics.fillStyle(0xd3d3d3, 1);

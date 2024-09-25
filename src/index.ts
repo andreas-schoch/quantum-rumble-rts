@@ -32,8 +32,7 @@ const config: Phaser.Types.Core.GameConfig = {
 window.addEventListener('load', () => {
   new Game(config);
 
-  if (DEBUG) {
-    // Display fps and memory usage
+  if (DEBUG.showFps) {
     // eslint-disable-next-line @typescript-eslint/ban-ts-comment
     // @ts-ignore
     (function(){const script=document.createElement('script');script.type='application/javascript';script.onload=function(){const stats=new Stats();document.body.appendChild(stats.dom);requestAnimationFrame(function loop(){stats.update();requestAnimationFrame(loop);});};script.src='./stats.js';document.head.appendChild(script);})();

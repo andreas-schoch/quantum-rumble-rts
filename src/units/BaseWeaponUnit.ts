@@ -3,7 +3,7 @@ import { EnergyRequest } from '../Network';
 import GameScene from '../scenes/GameScene';
 import { GRID, level } from '../constants';
 import { BaseStructure } from './BaseUnit';
-import { drawStar } from '../util/drawStar';
+import { drawStar } from '../util';
 
 // TODO consider refactoring everything to use ECS instead of inheritance...
 // (or at least create classes like HealthComponent, EnergyComponent, WeaponComponent etc. that can be added to units that need them)

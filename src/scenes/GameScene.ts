@@ -8,6 +8,7 @@ import { EmitterManager } from '../Emitter';
 import { wrap, Remote } from 'comlink';
 import SimulationWorker from 'worker-loader!../workers/simulation.worker.ts';
 import { TerrainSimulation } from '../terrain/TerrainSimulation.js';
+import { Tilemaps } from 'phaser';
 
 export default class GameScene extends Phaser.Scene {
   observer: Phaser.Events.EventEmitter = new Phaser.Events.EventEmitter();
@@ -26,6 +27,9 @@ export default class GameScene extends Phaser.Scene {
   private selectedUnitClass: Unit | null;
   simulation: Remote<TerrainSimulation>;
   emitterManager: EmitterManager;
+  tilemap: Tilemaps.Tilemap;
+  tileset: Tilemaps.Tileset | null;
+  isPaused = false;
 
   constructor() {
     super({key: SceneKeys.GAME_SCENE});
@@ -34,7 +38,16 @@ export default class GameScene extends Phaser.Scene {
   private create() {
     this.sfx_start_collect = this.sound.add('start_collect', {detune: 600, rate: 1.25, volume: 0.5 , loop: false});
     this.sfx_place_structure = this.sound.add('place_structure', {detune: 200, rate: 1.25, volume: 1 , loop: false});
-    // this.add.tileSprite(0, 0, GRID * WORLD_X,GRID * WORLD_Y, 'cell_white').setOrigin(0, 0).setDepth(-1).setAlpha(0.2);
+
+    // this.tilemap = this.make.tilemap({tileWidth: GRID, tileHeight: GRID, width: level.sizeX, height: level.sizeY, insertNull: true});
+    // this.tileset = this.tilemap.addTilesetImage("terrain", "terrain", GRID, GRID, 0, 2, 0);
+    // if (!this.tileset) throw new Error('tileset is null');
+
+    // for (const {elevation, depth} of config.terrainLayers) {
+    //   const layer = this.tilemap.createBlankLayer('terrain_' + elevation, this.tileset);
+    //   if (!layer) throw new Error('layer is null');
+    //   layer.setDepth(depth);
+    // }
 
     this.scene.launch(SceneKeys.GAME_UI_SCENE, [this, () => {
       this.scene.restart();
@@ -47,8 +60,8 @@ export default class GameScene extends Phaser.Scene {
     this.city = new City(this, Math.floor(level.cityCoords.x), Math.floor(level.cityCoords.y));
     this.network.placeUnit(this.city.coordX, this.city.coordY, this.city);
     this.simulation = wrap(new SimulationWorker());
-    this.simulation.getData().then(({terrainData, fluidData}) => {
-      this.terrain = new TerrainRenderer(this, terrainData, fluidData);
+    this.simulation.getData().then(({terrainData, fluidData, collectionData}) => {
+      this.terrain = new TerrainRenderer(this, terrainData, fluidData, collectionData);
 
       this.emitterManager = new EmitterManager(this);
 
@@ -61,6 +74,7 @@ export default class GameScene extends Phaser.Scene {
         delay: TICK_RATE,
         timeScale: 1,
         callback: () => {
+          if (this.isPaused) return;
           this.tickCounter++;
           this.simulation.tick(this.tickCounter).then(() => {
             this.emitterManager.tick(this.tickCounter);
@@ -107,6 +121,8 @@ export default class GameScene extends Phaser.Scene {
     const keyNINE = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.NINE);
     const keyESC = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ESC);
     const keyX = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.X);
+    const keyP = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.P);
+    const keySPACE = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
 
     this.controls = new Phaser.Cameras.Controls.SmoothedKeyControl({
       camera,
@@ -136,6 +152,8 @@ export default class GameScene extends Phaser.Scene {
     keyNINE.onDown = () => this.selectUnit(8);
     keyESC.onDown = () => this.selectUnit(-1);
     keyX.onDown = () => this.selectUnit(-1);
+    keyP.onDown = () => this.isPaused = !this.isPaused;
+    keySPACE.onDown = () => this.isPaused = !this.isPaused;
 
     // MOUSE AND POINTER STUFF
     const input = this.input;

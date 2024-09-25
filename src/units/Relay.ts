@@ -1,6 +1,6 @@
 import { GRID, HALF_GRID } from '../constants';
 import GameScene from '../scenes/GameScene';
-import { drawStar } from '../util/drawStar';
+import { drawStar } from '../util';
 import { BaseStructure } from './BaseUnit';
 
 export class Relay extends BaseStructure {

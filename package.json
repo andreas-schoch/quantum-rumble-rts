@@ -1,6 +1,6 @@
 {
   "name": "quantum-rumble-rts",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "An open source Creeper World like game made with Phaser3.",
   "scripts": {
     "start": "webpack serve --config webpack/webpack.dev.js",
@@ -34,7 +34,7 @@
   },
   "dependencies": {
     "comlink": "^4.4.1",
-    "phaser": "^3.60.0",
-    "simplex-noise": "^4.0.1"
+    "phaser": "^3.85.2",
+    "simplex-noise": "^4.0.3"
   }
 }
