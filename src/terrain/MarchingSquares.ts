@@ -1,5 +1,4 @@
-import { GRID, HALF_GRID } from "../constants";
-
+import { GRID, HALF_GRID } from '../constants';
 
 export type Point = { x: number; y: number };
 export type Line = { p1: Point; p2: Point, lw: number, c: number };

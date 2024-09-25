@@ -1,5 +1,5 @@
-import { GameObjects } from "phaser";
-import { GRID, level } from "./constants";
+import { GameObjects } from 'phaser';
+import { GRID, level } from './constants';
 
 export function getVisibleBounds(scene: Phaser.Scene): CoordBounds | null {
   const { x, y, width, height } = scene.cameras.main.worldView;
