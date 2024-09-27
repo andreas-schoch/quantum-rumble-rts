@@ -3,9 +3,8 @@ import { UNITS, Unit } from '..';
 import { City } from '../units/City';
 import { Network } from '../Network';
 import { BaseStructure } from '../units/BaseUnit';
-import { TerrainRenderer as TerrainRenderer } from '../terrain/Terrain';
-import { EmitterManager } from '../Emitter';
-import { TerrainSimulation } from '../terrain/TerrainSimulation';
+import { Renderer } from '../terrain/Terrain';
+import { Simulation } from '../terrain/TerrainSimulation';
 import { Tilemaps } from 'phaser';
 
 export default class GameScene extends Phaser.Scene {
@@ -21,11 +20,10 @@ export default class GameScene extends Phaser.Scene {
   sfx_start_collect: Phaser.Sound.BaseSound;
   sfx_place_structure: Phaser.Sound.BaseSound;
   tickCounter: number;
-  terrain: TerrainRenderer;
+  // gameRenderer: GameRenderer;
   private selectedUnitClass: Unit | null;
   // simulation: Remote<TerrainSimulation>;
-  simulation: TerrainSimulation;
-  emitterManager: EmitterManager;
+  simulation: Simulation;
   tilemap: Tilemaps.Tilemap;
   tileset: Tilemaps.Tileset | null;
   isPaused = false;
@@ -54,18 +52,15 @@ export default class GameScene extends Phaser.Scene {
 
     this.setupCameraAndInput();
     this.observer.removeAllListeners();
+    this.simulation = new Simulation();
     this.network = new Network(this);
 
-    this.city = new City(this, Math.floor(level.cityCoords.x), Math.floor(level.cityCoords.y));
-    this.network.placeUnit(this.city.coordX, this.city.coordY, this.city);
-    this.simulation = new TerrainSimulation();
-    const {terrainData, fluidData, collectionData} = this.simulation.getData();
-    this.terrain = new TerrainRenderer(this, terrainData, fluidData, collectionData);
-
-    this.emitterManager = new EmitterManager(this);
-
-    level.emitters.forEach(em => this.emitterManager.addEmitter(em));
-    this.emitterManager.onemit = async (xCoord, yCoord, amount, pattern) => await this.simulation.fluidChangeRequest(xCoord, yCoord, amount, pattern);
+    const index = level.cityCoords.yCoord * (level.sizeX + 1) + level.cityCoords.xCoord;
+    const elevation = this.simulation.terrainData[index];
+    this.city = new City(this, Math.floor(level.cityCoords.xCoord), Math.floor(level.cityCoords.yCoord), elevation);
+    this.network.placeUnit(this.city.xCoord, this.city.yCoord, this.city);
+    level.emitters.forEach(em => this.simulation.addEmitter(em));
+    const renderer = new Renderer(this, this.simulation);
 
     this.tickCounter = 0;
     // Only rendering related things should happen every frame. I potentially want to be able to simulate this game on a server, so it needs to be somewhat deterministic
@@ -76,8 +71,7 @@ export default class GameScene extends Phaser.Scene {
         if (this.isPaused) return;
         this.tickCounter++;
         this.simulation.tick(this.tickCounter);
-        this.emitterManager.tick(this.tickCounter);
-        this.terrain.tick(this.tickCounter);
+        renderer.tick(this.tickCounter);
         this.network.tick(this.tickCounter);
         for(const structure of BaseStructure.structuresInUpdatePriorityOrder) structure.tick(this.tickCounter);
       },
@@ -180,7 +174,9 @@ export default class GameScene extends Phaser.Scene {
       if (pointerCoordX < 0 || pointerCoordY < 0 || pointerCoordX > level.sizeX || pointerCoordY > level.sizeY) return; // skip out of bounds
 
       if (this.selectedUnitClass) {
-        const unit = new this.selectedUnitClass(this, pointerCoordX, pointerCoordY);
+        const index = pointerCoordY * (level.sizeX + 1) + pointerCoordX;
+        const elevation = this.simulation.terrainData[index];
+        const unit = new this.selectedUnitClass(this, pointerCoordX, pointerCoordY, elevation);
         this.network.placeUnit(pointerCoordX, pointerCoordY, unit);
       }
       // else console.log('TODO implement select'); // TODO find structure under click and select it (show info about it in the UI)

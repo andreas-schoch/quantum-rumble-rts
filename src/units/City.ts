@@ -1,5 +1,5 @@
 import GameScene from '../scenes/GameScene';
-import { GRID, HALF_GRID } from '../constants';
+import { Depth, GRID, HALF_GRID } from '../constants';
 import { BaseStructure } from './BaseUnit';
 import { drawStar } from '../util';
 
@@ -17,9 +17,9 @@ export class City extends BaseStructure {
   isEnergyRoot = true;
   updatePriority = 10;
 
-  constructor(scene: GameScene, coordX: number, coordY: number) {
-    super(scene, coordX, coordY);
-    this.sprite = this.scene.add.sprite(this.x - (HALF_GRID * 9), this.y - (HALF_GRID * 9), City.unitName).setDepth(1000).setOrigin(0, 0);
+  constructor(scene: GameScene, coordX: number, coordY: number, elevation: number) {
+    super(scene, coordX, coordY, elevation);
+    this.sprite = this.scene.add.sprite(this.x - (HALF_GRID * 9), this.y - (HALF_GRID * 9), City.unitName).setDepth(Depth.UNIT).setOrigin(0, 0);
     this.build(0);
   }
 

@@ -40,7 +40,7 @@ export class Graph<V = {x: number, y: number}, E = unknown> {
 
   createVertex(id: VertexId, x: number, y: number, value: V): Vertex<V> {
     if (this.vertices.has(id)) throw new Error(`Vertex with id ${id} already exists`);
-    const vertex = { id: id, data: value, x, y};
+    const vertex: Vertex<V> = { id: id, data: value, x, y};
     this.vertices.set(id, vertex);
     this.edgesByVertex.set(id, []);
     return vertex;

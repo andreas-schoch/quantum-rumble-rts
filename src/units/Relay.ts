@@ -1,4 +1,4 @@
-import { GRID, HALF_GRID } from '../constants';
+import { Depth, GRID, HALF_GRID } from '../constants';
 import GameScene from '../scenes/GameScene';
 import { drawStar } from '../util';
 import { BaseStructure } from './BaseUnit';
@@ -17,9 +17,9 @@ export class Relay extends BaseStructure {
 
   updatePriority = 1;
 
-  constructor(scene: GameScene, coordX: number, coordY: number) {
-    super(scene, coordX, coordY);
-    this.sprite = this.scene.add.sprite(this.x, this.y, Relay.unitName).setDepth(5000).setAlpha(0.3);
+  constructor(scene: GameScene, coordX: number, coordY: number, elevation: number) {
+    super(scene, coordX, coordY, elevation);
+    this.sprite = this.scene.add.sprite(this.x, this.y, Relay.unitName).setDepth(Depth.UNIT).setAlpha(0.3);
   }
 
   static generateTextures(scene: Phaser.Scene) {

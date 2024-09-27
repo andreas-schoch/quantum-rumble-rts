@@ -1,11 +1,12 @@
-import { GRID, SceneKeys } from '../constants';
+import { GRID, HALF_GRID, SceneKeys } from '../constants';
 import { Storage } from '../units/Storage';
 import { City } from '../units/City';
 import { Collector } from '../units/Collector';
 import { Relay } from '../units/Relay';
 import { Reactor } from '../units/Reactor';
 import { Speed } from '../units/Speed';
-import { EmitterManager } from '../Emitter';
+import { drawStar } from '../util';
+// import { EmitterManager } from '../Emitter';
 
 export default class PreloadScene extends Phaser.Scene {
   constructor() {
@@ -32,10 +33,16 @@ export default class PreloadScene extends Phaser.Scene {
     Storage.generateTextures(this);
     Reactor.generateTextures(this);
     Speed.generateTextures(this);
-    EmitterManager.generateTextures(this);
+
+    const graphics = this.add.graphics();
+
+    // EMITTER TEXTURE
+    graphics.fillStyle(0x0000ff, 1);
+    drawStar(graphics, HALF_GRID * 3, HALF_GRID * 3, 12, HALF_GRID * 3 * 0.9, HALF_GRID * 3 * 0.4);
+    graphics.generateTexture('emitter', GRID * 3, GRID * 3);
+    graphics.clear();
 
     // background cell white
-    const graphics = this.add.graphics();
     graphics.fillStyle(0xffffff, 1);
     graphics.lineStyle(1, 0xcccccc, 1);
     graphics.fillRect(0, 0, GRID, GRID);

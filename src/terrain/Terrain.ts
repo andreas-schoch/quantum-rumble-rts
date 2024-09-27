@@ -1,40 +1,29 @@
-import { DensityData, MarchingSquares } from './MarchingSquares';
+import { MarchingSquares } from './MarchingSquares';
 
-import { config, DEBUG, FLOW_DISABLED, GRID, level, SPACE_BETWEEN, THRESHOLD } from '../constants';
+import { config, Depth, GRID, HALF_GRID, level, SPACE_BETWEEN, THRESHOLD } from '../constants';
 import { GameObjects } from 'phaser';
 import GameScene from '../scenes/GameScene';
 import { getVisibleBounds } from '../util';
+import { CollectionInfo, EmitterInfo, Simulation } from './TerrainSimulation.js';
 
-// Reusing the same object to minimize Garbage Collection
-const densityData: DensityData = [0, 0, 0, 0];
-const densityDataTerrain: DensityData = [0, 0, 0, 0];
-
-export class TerrainRenderer {
-  private readonly scene: GameScene;
-  // private readonly terrainGraphics: Map<number, GameObjects.Graphics> = new Map();
+export class Renderer {
   readonly marchingSquares: MarchingSquares;
-  private texts: GameObjects.Text[];
   private fluidToTerrainAbove: Record<number, number> = {};
-  private renderTexture: Phaser.GameObjects.RenderTexture;
-  private renderTextureFluid: Phaser.GameObjects.RenderTexture;
-  private previousShapes: Uint8ClampedArray;
 
-  constructor(scene: GameScene, private readonly terrainData: Uint16Array, private readonly fluidData: Uint16Array, private readonly collectionData: Uint16Array) {
-    this.scene = scene;
+  private emitterSprites: Map<EmitterInfo['id'], GameObjects.Sprite> = new Map();
+  private collectorSprites: Map<CollectionInfo['id'], GameObjects.Sprite> = new Map();
 
+  private rtTerrain: Phaser.GameObjects.RenderTexture;
+  private rtFluid: Phaser.GameObjects.RenderTexture;
+  private rtCollection: Phaser.GameObjects.RenderTexture;
+
+  constructor(private scene: GameScene, private simulation: Simulation) {
+    const width = level.sizeX * GRID;
+    const height = level.sizeY * GRID;
+    this.rtTerrain = this.scene.make.renderTexture({x: 0, y: 0, width, height}, true).setDepth(Depth.TERRAIN).setOrigin(0, 0);
+    this.rtCollection = this.scene.make.renderTexture({x: 0, y: 0, width, height}, true).setDepth(Depth.Collection).setOrigin(0, 0);
+    this.rtFluid = this.scene.make.renderTexture({x: 0, y: 0, width, height}, true).setDepth(Depth.FLUID).setOrigin(0, 0);
     this.marchingSquares = new MarchingSquares();
-    this.renderTexture = this.scene.make.renderTexture({x: 0, y: 0, width: level.sizeX * GRID, height: level.sizeY * GRID}, true).setDepth(1).setOrigin(0, 0);
-    this.renderTextureFluid = this.scene.make.renderTexture({x: 0, y: 0, width: level.sizeX * GRID, height: level.sizeY * GRID}, true).setDepth(2).setOrigin(0, 0);
-
-    // this.texts = Array.from({ length: (level.sizeX + 1) * (level.sizeY + 1) }, () => scene.add.text(0, 0, '', { fontSize: '12px', color: '#000' }).setDepth(10000));
-    // for (let y = 0; y <= level.sizeY; y++) {
-    //   for (let x = 0; x <= level.sizeX; x++) {
-    //     const indexCenter = y * (level.sizeX + 1) + x;
-    //     const value = this.fluidData[indexCenter];
-    //     this.texts[indexCenter].setPosition(x * GRID, y * GRID);
-    //     this.texts[indexCenter].setText(value.toString());
-    //   }
-    // }
 
     const terrainThickness = THRESHOLD * 3;
     for (const fluidLayer of config.fluidLayers) {
@@ -44,53 +33,79 @@ export class TerrainRenderer {
 
     this.generateLayers();
     this.renderTerrain();
+    // this.renderCollectionArea();
   }
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   tick(tickCounter: number) {
-    if (FLOW_DISABLED) return;
     this.renderFluid();
-    if (DEBUG.showFluidDensityText) this.renderDebug();
+    if (this.simulation.lastChangeTick.collection === tickCounter) this.renderCollectionArea();
+    if (this.simulation.lastChangeTick.emitters === tickCounter) this.renderEmitters();
   }
 
   private renderTerrain() {
+    // console.time('renderTerrain');
+    const world = this.scene.network.world;
     // BOTTOM LAYER
-    const graphics = this.scene.add.graphics().setDepth(1);
+    const graphics = this.scene.add.graphics();
     const BASE_TERRAIN_COLOR = 0x544741;
     graphics.fillStyle(BASE_TERRAIN_COLOR, 1);
     graphics.fillRect(0, 0, level.sizeX * GRID, level.sizeY * GRID);
+    const terrainData = this.simulation.terrainData;
     // ELEVATION LAYERS
-    this.renderTexture.beginDraw();
-    this.renderTexture.batchDraw(graphics, 0, 0, 1);
-    for (const { elevation} of config.terrainLayers) {
-      for (let y = 0; y < level.sizeY; y++) {
-        for (let x = 0; x < level.sizeX; x++) {
-          const indexTL = y * (level.sizeX + 1) + x;
-          const indexBL = indexTL + level.sizeX + 1;
-          const indexTR = indexTL + 1;
-          const indexBR = indexBL + 1;
+    this.rtTerrain.beginDraw();
+    this.rtTerrain.batchDraw(graphics, 0, 0, 1);
 
-          densityData[0] = this.terrainData[indexTL];
-          densityData[1] = this.terrainData[indexTR];
-          densityData[2] = this.terrainData[indexBR];
-          densityData[3] = this.terrainData[indexBL];
+    for (const {elevation} of config.terrainLayers) {
+      const key = 'terrain_' + elevation;
+      const terrainElevationAbove = elevation + THRESHOLD * 3;
+      for (const {edgeIndexTL, edgeIndexTR, edgeIndexBL, edgeIndexBR, x, y} of world) {
 
-          const shapeIndexAbove = this.marchingSquares.getShapeIndex(densityData, elevation + (THRESHOLD * 3));
-          if (shapeIndexAbove === 15) continue; // prevent drawing invisible terrain
+        const tl = terrainData[edgeIndexTL];
+        const tr = terrainData[edgeIndexTR];
+        const br = terrainData[edgeIndexBR];
+        const bl = terrainData[edgeIndexBL];
 
-          const shape = this.marchingSquares.getShapeIndex(densityData, elevation);
-          this.renderTexture.batchDrawFrame('terrain_' + elevation, shape, x * GRID, y * GRID, 1);
-        }
+        const shapeIndexAbove = this.marchingSquares.getShapeIndex(tl, tr, br, bl, terrainElevationAbove);
+        if (shapeIndexAbove === 15) continue; // prevent drawing invisible terrain
+
+        const shape = this.marchingSquares.getShapeIndex(tl, tr, br, bl, elevation);
+        this.rtTerrain.batchDrawFrame(key, shape, x, y, 1);
       }
+
     }
 
-    this.renderTexture.endDraw();
+    this.rtTerrain.endDraw();
     graphics.destroy();
+    // console.timeEnd('renderTerrain');
+  }
+
+  private renderCollectionArea() {
+    const cd = this.simulation.collectionData;
+    this.rtCollection.clear();
+    this.rtCollection.beginDraw();
+    for (const {edgeIndexTL, edgeIndexTR, edgeIndexBL, edgeIndexBR, xCoord, yCoord} of this.scene.network.world) {
+    // for (let yCoord = 0; yCoord < level.sizeY; yCoord++) {
+      // const rowOffset = level.sizeX + 1;
+      // for (let xCoord = 0; xCoord < level.sizeX; xCoord++) {
+      // const indexTL = yCoord * rowOffset + xCoord;
+      // const indexTR = indexTL + 1;
+      // const indexBL = indexTL + rowOffset;
+      // const indexBR = indexTR + rowOffset;
+
+      const shape = this.marchingSquares.getShapeIndex(cd[edgeIndexTL], cd[edgeIndexTR], cd[edgeIndexBR], cd[edgeIndexBL], 1);
+      if (shape === 0) continue;
+      this.rtCollection.batchDrawFrame('collection_area', shape, xCoord * GRID, yCoord * GRID);
+    }
+    // }
+
+    this.rtCollection.endDraw();
   }
 
   private renderFluid(): void {
-    this.renderTextureFluid.clear();
-    this.renderTextureFluid.beginDraw();
+    // console.time('renderFluid');
+    this.rtFluid.clear();
+    this.rtFluid.beginDraw();
     const bounds = getVisibleBounds(this.scene);
     if (!bounds) return;
 
@@ -100,61 +115,87 @@ export class TerrainRenderer {
     const endY = Math.min(bounds.coordY + bounds.numCoordsY, level.sizeY);
     const endX = Math.min(bounds.coordX + bounds.numCoordsX, level.sizeX);
 
-    const fluid = this.fluidData;
-    const terrain = this.terrainData;
+    const fluid = this.simulation.fluidData;
+    const terrain = this.simulation.terrainData;
     const rowOffset = level.sizeX + 1;
 
     for (let y = startY; y <= endY; y++) {
       for (let x = startX; x <= endX; x++) {
         const indexTL = y * rowOffset + x;
-        const indexBL = indexTL + rowOffset;
         const indexTR = indexTL + 1;
-        const indexBR = indexBL + 1;
+        const indexBL = indexTL + rowOffset;
+        const indexBR = indexTR + rowOffset;
 
-        const fluidTL = fluid[indexTL];
-        const fluidTR = fluid[indexTR];
-        const fluidBR = fluid[indexBR];
-        const fluidBL = fluid[indexBL];
+        const terrainTL = terrain[indexTL];
+        const terrainTR = terrain[indexTR];
+        const terrainBR = terrain[indexBR];
+        const terrainBL = terrain[indexBL];
 
-        densityData[0] = (fluidTL >= THRESHOLD) ? fluidTL + terrain[indexTL] : fluidTL;
-        densityData[1] = (fluidTR >= THRESHOLD) ? fluidTR + terrain[indexTR] : fluidTR;
-        densityData[2] = (fluidBR >= THRESHOLD) ? fluidBR + terrain[indexBR] : fluidBR;
-        densityData[3] = (fluidBL >= THRESHOLD) ? fluidBL + terrain[indexBL] : fluidBL;
+        let fluidTL = fluid[indexTL];
+        let fluidTR = fluid[indexTR];
+        let fluidBR = fluid[indexBR];
+        let fluidBL = fluid[indexBL];
 
-        densityDataTerrain[0] = terrain[indexTL];
-        densityDataTerrain[1] = terrain[indexTR];
-        densityDataTerrain[2] = terrain[indexBR];
-        densityDataTerrain[3] = terrain[indexBL];
+        if (fluidTL >= THRESHOLD) fluidTL += terrain[indexTL];
+        if (fluidTR >= THRESHOLD) fluidTR += terrain[indexTR];
+        if (fluidBR >= THRESHOLD) fluidBR += terrain[indexBR];
+        if (fluidBL >= THRESHOLD) fluidBL += terrain[indexBL];
 
         const posX = x * GRID;
         const posY = y * GRID;
 
+        let shapeBelow = -1;
         for (const {elevation} of config.fluidLayers) {
-          const shape = this.marchingSquares.getShapeIndex(densityData, elevation);
-          if (shape === 0) break;
+          const shape = this.marchingSquares.getShapeIndex(fluidTL, fluidTR, fluidBR, fluidBL, elevation);
+          if (shape === 0) break; // above layers will also be empty if this one is
+          // const omitLines = shapeBelow !== 15 &&
+          //                   (shapeBelow === shape) ||
+          //                   (shapeBelow === 9 && shape === 1 || shape === 8) ||
+          //                   (shapeBelow === 12 && shape === 4 || shape === 8);
 
-          const shapeTerrainAbove = this.marchingSquares.getShapeIndex(densityDataTerrain, this.fluidToTerrainAbove[elevation]);
-          if (shapeTerrainAbove === 15) continue;
-          this.renderTextureFluid.batchDrawFrame('fluid_' + elevation, shape, posX, posY);
+          const omitLines = shapeBelow === shape;
+
+          const shapeTerrainAbove = this.marchingSquares.getShapeIndex(terrainTL, terrainTR, terrainBR, terrainBL, this.fluidToTerrainAbove[elevation]);
+          if (shapeTerrainAbove === 15) continue; // no need to render if there is terrain higher than the fluid
+          const key = omitLines ? 'fluid_' + elevation + '_noline' : 'fluid_' + elevation;
+          this.rtFluid.batchDrawFrame(key, shape, posX, posY);
+          // this.rtFluid.batchDrawFrame('fluid_' + elevation, shape, posX, posY);
+          shapeBelow = shape;
         }
       }
     }
-    this.renderTextureFluid.endDraw();
+    this.rtFluid.endDraw();
+    // console.timeEnd('renderFluid');
+  }
+
+  private renderEmitters() {
+    for (const emitter of this.simulation.emitters.values()) {
+      if (this.emitterSprites.has(emitter.id)) continue;
+      const emitterSprite = this.scene.add.sprite(emitter.xCoord * GRID + HALF_GRID, emitter.yCoord * GRID + HALF_GRID, 'emitter').setOrigin(0.5, 0.5).setDepth(Depth.EMITTER);
+      this.emitterSprites.set(emitter.id, emitterSprite);
+    }
   }
 
   private generateLayers() {
+    this.marchingSquares.computeShapeTable(GRID / 4, GRID / 8, 0x000000, 0xffffff);
     for (const {elevation, color} of config.terrainLayers) {
       const key = 'terrain_' + elevation;
       this.generateTexture(key, color, 4, SPACE_BETWEEN);
+      this.generateTexture(key + '_noline', color, 4, SPACE_BETWEEN, false);
     }
 
-    for (const {elevation} of config.fluidLayers) {
-      const name = 'fluid_' + elevation;
-      this.generateTexture(name, 0x4081b7, 0.4, SPACE_BETWEEN);
+    this.marchingSquares.computeShapeTable(GRID / 16, GRID / 16, 0x000000, 0xffffff, GRID / 8);
+    for (const {elevation, color, alpha} of config.fluidLayers) {
+      const key = 'fluid_' + elevation;
+      this.generateTexture(key, color, alpha, SPACE_BETWEEN);
+      this.generateTexture(key + '_noline', color, alpha, SPACE_BETWEEN, false);
     }
+
+    this.marchingSquares.computeShapeTable(0, 0, 0, 0, GRID / 8);
+    this.generateTexture('collection_area', 0x1a8f1e, 0.3, SPACE_BETWEEN);
   }
 
-  private generateTexture(key: string, color: number, alpha: number = 1, spaceBetween: number = 2) {
+  private generateTexture(key: string, color: number, alpha: number = 1, spaceBetween: number = 2, renderLines = true) {
     const graphics = this.scene.add.graphics().fillStyle(color, alpha);
 
     for (let y = 0; y < 4; y++) {
@@ -168,7 +209,7 @@ export class TerrainRenderer {
           graphics.fillRect(0, 0, GRID, GRID);
         } else {
           for (const points of shape.polygons) graphics.fillPoints(points, true);
-          for (const { p1, p2, c, lw } of shape.isoLines) graphics.lineStyle(lw, c).lineBetween(p1.x, p1.y, p2.x, p2.y);
+          if (renderLines) for (const { p1, p2, c, lw } of shape.isoLines) graphics.lineStyle(lw, c).lineBetween(p1.x, p1.y, p2.x, p2.y);
         }
         graphics.translateCanvas(-offsetX, -offsetY);
       }
@@ -186,29 +227,6 @@ export class TerrainRenderer {
         const offsetX = x * (GRID + SPACE_BETWEEN);
         const offsetY = y * (GRID + SPACE_BETWEEN);
         texture.add(shapeIndex, 0, offsetX, offsetY, GRID, GRID);
-      }
-    }
-
-  }
-
-  private renderDebug() {
-    if (!this.texts) {
-      this.texts = Array.from({ length: (level.sizeX + 1) * (level.sizeY + 1) }, () => this.scene.add.text(0, 0, '', { fontSize: '12px', color: '#000' }).setDepth(10000));
-      for (let y = 0; y <= level.sizeY; y++) {
-        for (let x = 0; x <= level.sizeX; x++) {
-          const indexCenter = y * (level.sizeX + 1) + x;
-          const value = this.fluidData[indexCenter];
-          this.texts[indexCenter].setPosition(x * GRID, y * GRID);
-          this.texts[indexCenter].setText(value.toString());
-        }
-      }
-    }
-
-    for (let y = 0; y <= level.sizeY; y++) {
-      for (let x = 0; x <= level.sizeX; x++) {
-        const indexCenter = y * (level.sizeX + 1) + x;
-        const value = this.fluidData[indexCenter];
-        this.texts[indexCenter].setText(value.toString());
       }
     }
   }

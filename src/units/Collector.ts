@@ -1,4 +1,4 @@
-import { GRID, HALF_GRID } from '../constants';
+import { Depth, GRID, HALF_GRID } from '../constants';
 import GameScene from '../scenes/GameScene';
 import { BaseStructure } from './BaseUnit';
 
@@ -8,7 +8,7 @@ export class Collector extends BaseStructure {
   static isRelay = true;
   static movable = false;
   static connectionRange = 9;
-  static energyCollectionRange = 4;
+  static energyCollectionRange = 5;
   static energyProduction = 0;
   static energyStorageCapacity = 0;
   static healthMax = 1;
@@ -16,9 +16,9 @@ export class Collector extends BaseStructure {
   updatePriority = 2;
   sprite: Phaser.GameObjects.Sprite;
 
-  constructor(scene: GameScene, coordX: number, coordY: number) {
-    super(scene, coordX, coordY);
-    this.sprite = this.scene.add.sprite(this.x, this.y, Collector.unitName).setDepth(500).setAlpha(0.3);
+  constructor(scene: GameScene, coordX: number, coordY: number, elevation: number) {
+    super(scene, coordX, coordY, elevation);
+    this.sprite = this.scene.add.sprite(this.x, this.y, Collector.unitName).setDepth(Depth.UNIT).setAlpha(0.3);
   }
 
   static generateTextures(scene: Phaser.Scene) {

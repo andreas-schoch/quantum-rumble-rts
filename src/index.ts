@@ -11,9 +11,12 @@ import { Storage } from './units/Storage';
 import { BaseWeaponStructure } from './units/BaseWeaponUnit';
 
 const config: Phaser.Types.Core.GameConfig = {
+  render: {
+    antialiasGL: false,
+    batchSize: 512
+  },
   type: WEBGL,
   backgroundColor: '0xffffff',
-
   scale: {
     mode: Phaser.Scale.FIT,
     autoCenter: Phaser.Scale.CENTER_BOTH,

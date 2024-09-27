@@ -1,7 +1,6 @@
-import { Cell } from '../Network';
 import { EnergyRequest } from '../Network';
 import GameScene from '../scenes/GameScene';
-import { GRID, level } from '../constants';
+import { Depth, GRID, THRESHOLD } from '../constants';
 import { BaseStructure } from './BaseUnit';
 import { drawStar } from '../util';
 
@@ -17,7 +16,7 @@ export class BaseWeaponStructure extends BaseStructure {
   static energyProduction = 0;
   static energyStorageCapacity = 0;
   static healthMax = 100;
-  static damage = 8192;
+  static damage = THRESHOLD * 8;
 
   ammoCost = 0.25;
   updatePriority = 1;
@@ -35,8 +34,8 @@ export class BaseWeaponStructure extends BaseStructure {
 
   static attackSFX: Phaser.Sound.BaseSound;
 
-  constructor(scene: GameScene, coordX: number, coordY: number) {
-    super(scene, coordX, coordY);
+  constructor(scene: GameScene, coordX: number, coordY: number, elevation: number) {
+    super(scene, coordX, coordY, elevation);
     if (!BaseWeaponStructure.attackSFX) BaseWeaponStructure.attackSFX = scene.sound.add('attack_turret', {detune: -200, rate: 1.25, volume: 0.5 , loop: false});
     this.graphics = scene.add.graphics();
     this.draw();
@@ -81,28 +80,42 @@ export class BaseWeaponStructure extends BaseStructure {
     this.lastAttack = tickCounter;
     this.draw();
     BaseWeaponStructure.attackSFX.play();
-    this.scene.simulation.fluidChangeRequest(this.coordX, this.coordY, -BaseWeaponStructure.damage, this.damagePattern);
+    // const xCoord = Math.floor(nearestTarget.x / GRID);
+    // const yCoord = Math.floor(nearestTarget.y / GRID);
+    // this.scene.simulation.fluidChangeRequest(xCoord, yCoord, -BaseWeaponStructure.damage, this.damagePattern);
+    this.scene.simulation.fluidChangeRequest(this.xCoord, this.yCoord, -BaseWeaponStructure.damage, this.damagePattern);
   }
 
-  protected getNearestTarget(): Cell | null {
-    let nearest: Cell | null = null;
-    let nearestDistance = Infinity;
+  // protected getNearestTarget(): Cell | null {
+  //   const nearest: Cell | null = null;
+  //   const nearestDistance = Infinity;
 
-    for (let y = this.coordY - this.attackRange; y <= this.coordY + this.attackRange; y++) {
-      for (let x = this.coordX - this.attackRange; x <= this.coordX + this.attackRange; x++) {
-        if (x < 0 || y < 0 || x >= level.sizeX || y >= level.sizeY) continue; // skip out of bounds
-        const cell = this.scene.network.world[y][x];
-        if (!cell.ref) continue; // skip empty cells
-        const distance = Math.abs(x - this.coordX) + Math.abs(y - this.coordY); // manhattan distance, not euclidean
-        if (distance > this.attackRange) continue; // skip cells that are out of range
-        if (distance < nearestDistance) {
-          nearest = cell;
-          nearestDistance = distance;
-        }
-      }
-    }
-    return nearest;
-  }
+  //   const fluidData = this.scene.simulation.fluidData;
+
+  //   for (let y = this.coordY - this.attackRange; y <= this.coordY + this.attackRange; y++) {
+  //     for (let x = this.coordX - this.attackRange; x <= this.coordX + this.attackRange; x++) {
+  //       if (x < 0 || y < 0 || x >= level.sizeX || y >= level.sizeY) continue; // skip out of bounds
+  //       // const cell = this.scene.network.world[y][x];
+
+  //       const indexTL = y * (level.sizeX + 1) + x;
+  //       const indexBL = indexTL + level.sizeX + 1;
+  //       const indexTR = indexTL + 1;
+  //       const indexBR = indexBL + 1;
+
+  //       const fluidTL = fluidData[indexTL];
+  //       const fluidTR = fluidData[indexTR];
+  //       const fluidBR = fluidData[indexBR];
+  //       const fluidBL = fluidData[indexBL];
+  //       const avg = (fluidTL + fluidTR + fluidBR + fluidBL) / 4;
+
+  //       const distance = Math.abs(x - this.coordX) + Math.abs(y - this.coordY); // manhattan distance, not euclidean
+  //       if (distance > this.attackRange) continue; // skip cells that are out of range
+  //       if (distance < nearestDistance) {
+  //       }
+  //     }
+  //   }
+  //   return nearest;
+  // }
 
   protected draw() {
     const rotation = -45;
@@ -124,6 +137,6 @@ export class BaseWeaponStructure extends BaseStructure {
     this.graphics.fillStyle(0xffffff, 2);
     this.graphics.fillCircle(0, 0, GRID * 3 * 0.2);
     this.graphics.strokeCircle(0, 0, GRID * 3 * 0.2);
-    this.graphics.setDepth(500);
+    this.graphics.setDepth(Depth.UNIT);
   }
 }

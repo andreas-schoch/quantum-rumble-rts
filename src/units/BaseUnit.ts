@@ -1,16 +1,15 @@
-import { GRID, HALF_GRID } from '../constants';
+import { GRID, HALF_GRID, level } from '../constants';
 import { Unit } from '..';
 import { EnergyRequest } from '../Network';
 import { PathfinderResult } from '../Graph';
 import GameScene from '../scenes/GameScene';
 
+// In hindsight, OOP wasn't the right choice for units. I would like to refactor it using the ECS pattern but cannot be bothered to do it now.
 export abstract class BaseStructure {
-  scene: GameScene;
   id: string;
   x: number;
   y: number;
-  coordX: number;
-  coordY: number;
+  cellIndex: number;
   energyPath: PathfinderResult<{x: number, y: number}> = {found: false, distance: Infinity, path: []};
 
   static structuresInUpdatePriorityOrder: BaseStructure[] = [];
@@ -44,16 +43,14 @@ export abstract class BaseStructure {
   CLASS: Unit;
   static type = 'structure';
 
-  constructor(scene: GameScene, coordX: number, coordY: number) {
-    this.scene = scene;
+  constructor(public scene: GameScene, public xCoord: number, public yCoord: number, public elevation: number) {
     this.id = Math.random().toString(36).substring(2, 10);
-    this.x = coordX * GRID + HALF_GRID;
-    this.y = coordY * GRID + HALF_GRID;
-    this.coordX = coordX;
-    this.coordY = coordY;
+    this.x = xCoord * GRID + HALF_GRID;
+    this.y = yCoord * GRID + HALF_GRID;
+    this.cellIndex = yCoord * (level.sizeX + 1) + xCoord;
     BaseStructure.structuresById.set(this.id, this);
     this.buildCost = this.constructor['buildCost'];
-    this.CLASS = Object.getPrototypeOf(this).constructor;
+    this.CLASS = Object.getPrototypeOf(this).constructor; // TODO I dont like this. get rid of it
   }
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -75,7 +72,7 @@ export abstract class BaseStructure {
   }
 
   activate() {
-    this.scene.network.world[this.coordY][this.coordX].ref = this;
+    this.scene.network.world[this.cellIndex].ref = this;
     this.sprite && this.sprite.clearTint();
     BaseStructure.activeStructureIds.add(this.id);
     BaseStructure.structuresInUpdatePriorityOrder.push(this);
@@ -89,7 +86,7 @@ export abstract class BaseStructure {
     // if (this.preview) return;
     BaseStructure.activeStructureIds.delete(this.id);
     BaseStructure.structuresInUpdatePriorityOrder = BaseStructure.structuresInUpdatePriorityOrder.filter(s => s.id !== this.id);
-    if (this.CLASS.energyCollectionRange) this.scene.network.stopCollecting(this);
+    if (this.CLASS.energyCollectionRange) this.scene.simulation.removeCollector(this.id);
     // if (this.energyProduction) this.scene.network.energyProducing -= this.energyProduction;
     // if (this.energyStorageCapacity) this.scene.network.energyStorageMax -= this.energyStorageCapacity;
   }
@@ -126,7 +123,7 @@ export abstract class BaseStructure {
     this.deactivate();
     BaseStructure.structuresById.delete(this.id);
     BaseStructure.activeStructureIds.delete(this.id);
-    this.scene.network.world[this.coordY][this.coordX].ref = null;
+    this.scene.network.world[this.cellIndex].ref = null;
     // TODO Base class does to much. Move specific stuff to subclasses
     if (this.CLASS.energyStorageCapacity) this.scene.network.energyStorageMax -= this.CLASS.energyStorageCapacity;
     if (this.CLASS.energyProduction) this.scene.network.energyProducing -= this.CLASS.energyProduction;
@@ -144,7 +141,7 @@ export abstract class BaseStructure {
     if (this.built) throw new Error('This structure is already built');
     this.buildCost = Math.max(this.buildCost - amount, 0);
     if (this.buildCost <= 0) {
-      if (this.CLASS.energyCollectionRange) this.scene.network.startCollecting(this);
+      if (this.CLASS.energyCollectionRange) this.scene.simulation.addCollector({id: this.id, xCoord: this.xCoord, yCoord: this.yCoord, radius: this.CLASS.energyCollectionRange, elevation: this.elevation});
       this.healthCurrent = this.CLASS.healthMax;
       if (this.CLASS.energyProduction) this.scene.network.energyProducing += this.CLASS.energyProduction;
       if (this.CLASS.energyStorageCapacity) this.scene.network.energyStorageMax += this.CLASS.energyStorageCapacity;
@@ -157,21 +154,24 @@ export abstract class BaseStructure {
   protected draw() { /* no-op */ }
 
   canMoveTo(coordX: number, coordY: number) {
-    return this.scene.network.world[coordY][coordX].ref === null || this.scene.network.world[coordY][coordX].ref === this;
+    const index = coordY * (level.sizeX + 1) + coordX;
+    const ref = this.scene.network.world[index].ref;
+    return ref === null || ref === this;
   }
 
   move(coordX: number, coordY: number): void | true {
-    if (this.scene.network.world[coordY][coordX].ref === this) return;
+    const newCellIndex = coordY * (level.sizeX + 1) + coordX;
+    if (this.scene.network.world[newCellIndex].ref === this) return;
     if (!this.CLASS.movable || this.destroyed) throw new Error('This structure is not movable or already destroyed');
-    this.coordX = coordX;
-    this.coordY = coordY;
+    this.xCoord = coordX;
+    this.yCoord = coordY;
     this.x = coordX * GRID + HALF_GRID;
     this.y = coordY * GRID + HALF_GRID;
 
     if (this.sprite) this.sprite.setPosition(this.x, this.y);
 
-    const cellBefore = this.scene.network.world[this.coordY][this.coordX];
-    const cellAfter = this.scene.network.world[coordY][coordX];
+    const cellBefore = this.scene.network.world[this.cellIndex];
+    const cellAfter = this.scene.network.world[newCellIndex];
 
     cellBefore.ref = null;
     cellAfter.ref = this;

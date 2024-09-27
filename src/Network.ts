@@ -3,14 +3,14 @@ import GameScene from './scenes/GameScene';
 import { Graph, PathfinderResult } from './Graph';
 import { BaseStructure } from './units/BaseUnit';
 import { City } from './units/City';
-import { GRID, HALF_GRID, level, TICK_DELTA } from './constants';
+import { Depth, GRID, HALF_GRID, level, TICK_DELTA } from './constants';
 import { Unit } from '.';
 import { Remote, wrap } from 'comlink';
 import { EVENT_ENERGY_CONSUMPTION_CHANGE, EVENT_ENERGY_PRODUCTION_CHANGE, EVENT_ENERGY_STORAGE_CHANGE } from './constants';
 
 export class Network {
   scene: GameScene;
-  world: Cell[][] = []; // TODO maybe temporary until deciding weather to merge with graph (use vertices as cells)
+  world: Cell[] = []; // TODO maybe temporary until deciding weather to merge with graph (use vertices as cells)
   graph: Graph<BaseStructure, Phaser.GameObjects.Sprite> = new Graph();
   remoteGraph: Remote<Graph>;
   renderTexture: Phaser.GameObjects.RenderTexture;
@@ -18,12 +18,12 @@ export class Network {
   root: City | null = null;
 
   collectionMap: Map<string, [BaseStructure[], Phaser.GameObjects.Sprite | undefined]> = new Map();
-  collectionSpriteSet: Set<Phaser.GameObjects.Sprite> = new Set();
+  // collectionSpriteSet: Set<Phaser.GameObjects.Sprite> = new Set();
 
   // State
   speed = 150; // how many pixels energy balls travel per second
   energyProducing = 0;
-  energyCollecting = 0;
+  // energyCollecting = 0;
   energyStorageMax = 0;
   energyStorageCurrent = City.energyStorageCapacity; // start full TODO refactor
 
@@ -38,26 +38,34 @@ export class Network {
   energyConsumedPerSecond = 0;
 
   constructor(scene: GameScene) {
-    for (let y = 0; y < level.sizeY; y++) {
-      const row : Cell[]= [];
-      for (let x = 0; x < level.sizeX; x++) {
-        row.push({x, y, ref: null});
+    for (let yCoord = 0; yCoord < level.sizeY; yCoord++) {
+      for (let xCoord = 0; xCoord < level.sizeX; xCoord++) {
+        const cellIndex = yCoord * (level.sizeX + 1) + xCoord;
+
+        const edgeIndexTL = yCoord * (level.sizeX + 1) + xCoord;
+        const edgeIndexBL = edgeIndexTL + level.sizeX + 1;
+        const edgeIndexTR = edgeIndexTL + 1;
+        const edgeIndexBR = edgeIndexBL + 1;
+
+        const x = xCoord * GRID;
+        const y = yCoord * GRID;
+
+        this.world.push({cellIndex, x, y, xCoord, yCoord, edgeIndexTL, edgeIndexTR, edgeIndexBL, edgeIndexBR, ref: null});
       }
-      this.world.push(row);
     }
 
     this.remoteGraph = wrap(new WebpackWorker());
     this.scene = scene;
-    this.previewEdgeSprite = this.scene.add.sprite(0, 0, 'cell_green').setDepth(499).setOrigin(0, 0.5);
-    this.previewUnitSprite = this.scene.add.sprite(0, 0, 'cell_green').setDepth(499).setOrigin(0, 0.5);
-    this.previewEdgeRenderTexture = this.scene.add.renderTexture(0, 0, level.sizeX * GRID, level.sizeY * GRID).setDepth(499).setOrigin(0, 0).setAlpha(0.5);
+    this.previewEdgeSprite = this.scene.add.sprite(0, 0, 'cell_green').setDepth(Depth.NETWORK).setOrigin(0, 0.5);
+    this.previewUnitSprite = this.scene.add.sprite(0, 0, 'cell_green').setDepth(Depth.UNIT).setOrigin(0, 0.5);
+    this.previewEdgeRenderTexture = this.scene.add.renderTexture(0, 0, level.sizeX * GRID, level.sizeY * GRID).setDepth(Depth.NETWORK).setOrigin(0, 0).setAlpha(0.5);
     this.previewEdgeSprite.setVisible(false);
-    this.previewEdgeRenderTexture.draw(this.previewEdgeSprite);
+    // this.previewEdgeRenderTexture.draw(this.previewEdgeSprite);
   }
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   tick(tickCounter: number) {
-    const energyProducedPerSecond = this.energyProducing + this.energyCollecting;
+    const energyProducedPerSecond = this.energyProducing + this.scene.simulation.energyCollecting;
     const energyStorage = Math.min(this.energyStorageCurrent + (energyProducedPerSecond * TICK_DELTA), this.scene.network.energyStorageMax);
     const energyDeficit = this.scene.network.requestQueue.reduce((acc, cur) => acc + cur.amount, 0);
 
@@ -92,11 +100,17 @@ export class Network {
   }
 
   getCellsInRange(coordX: number, coordY: number, range: number, occupiedOnly = true) {
+    const startY = Math.max(coordY - range, 0);
+    const startX = Math.max(coordX - range, 0);
+    const endY = Math.min(coordY + range, level.sizeY);
+    const endX = Math.min(coordX + range, level.sizeX);
+
     const cells: [Cell, number][] = [];
-    for (let y = coordY - range; y <= coordY + range; y++) {
-      for (let x = coordX - range; x <= coordX + range; x++) {
-        if (x < 0 || y < 0 || x >= this.world[0].length || y >= this.world.length) continue; // skip out of bounds
-        const cell = this.world[y][x];
+    for (let y = startY; y <= endY; y++) {
+      for (let x = startX; x <= endX; x++) {
+        const index = y * (level.sizeX + 1) + x;
+        const cell = this.world[index];
+
         if (occupiedOnly && !cell.ref) continue; // skip unoccupied cells only when desired
         const distance = Math.abs(x - coordX) + Math.abs(y - coordY); // manhattan distance, not euclidean
         if (distance > range) continue; // skip cells that are out of range
@@ -115,66 +129,66 @@ export class Network {
     const texture = request.type === 'ammo' ? 'energy_red' : 'energy';
     const duration = (energyPath.distance / this.speed) * 1000;
     const energyBall: Energy = {follower: this.scene.add.follower(path, points[0], points[1], texture), id: this.generateId()};
-    energyBall.follower.setScale(1).setDepth(501);
+    energyBall.follower.setScale(1).setDepth(Depth.ENERGY);
     energyBall.follower.startFollow({duration, repeat: 0, onComplete: () => {
       energyBall.follower.destroy();
       request.requester.receiveEnergy(request);
     }});
   }
 
-  startCollecting(structure: BaseStructure) {
-    const {coordX, coordY, CLASS: {energyCollectionRange}} = structure;
+  // startCollecting(structure: BaseStructure) {
+  //   const {coordX, coordY, CLASS: {energyCollectionRange}} = structure;
+  //   if (energyCollectionRange === 0) return;
+  //   this.scene.sfx_start_collect.play();
+  //   const collector = {coordX, coordY, range: energyCollectionRange};
+  //   // this.scene.simulation.addCollector(coordX, coordY, range: energyCollectionRange, id);
 
-    if (energyCollectionRange === 0) return;
+  //   for (let y = coordY - energyCollectionRange; y <= coordY + energyCollectionRange; y++) {
+  //     for (let x = coordX - energyCollectionRange; x <= coordX + energyCollectionRange; x++) {
+  //       if (x < 0 || y < 0 || x >= this.world[0].length || y >= this.world.length) continue; // skip out of bounds
+  //       const manhattanDistance = Math.abs(coordX - x) + Math.abs(coordY - y);
+  //       if (manhattanDistance > energyCollectionRange) continue; // skip out of range
+  //       const key = `${x}-${y}`;
+  //       // TODO merge into CELL
+  //       const arr = this.collectionMap.get(key) || [[], undefined];
+  //       arr[0].push(structure);
+  //       // if (arr[0].length === 1) {
+  //       // TODO use marching squares to draw the collecting area. Draw each elevation separately
+  //       // arr[1] = this.scene.add.sprite(x * GRID, y * GRID, 'cell_green').setDepth(500).setOrigin(0, 0).setAlpha(0.4);
+  //       // this.collectionSpriteSet.add(arr[1]);
+  //       // }
+  //       // this.collectionMap.set(key, arr);
+  //       this.energyCollecting = this.collectionMap.size * 0.005;
+  //       this.scene.observer.emit(EVENT_ENERGY_PRODUCTION_CHANGE, this.energyCollecting + this.energyProducing);
 
-    this.scene.sfx_start_collect.play();
+  //     }
+  //   }
+  // }
 
-    for (let y = coordY - energyCollectionRange; y <= coordY + energyCollectionRange; y++) {
-      for (let x = coordX - energyCollectionRange; x <= coordX + energyCollectionRange; x++) {
-        if (x < 0 || y < 0 || x >= this.world[0].length || y >= this.world.length) continue; // skip out of bounds
-        const manhattanDistance = Math.abs(coordX - x) + Math.abs(coordY - y);
-        if (manhattanDistance > energyCollectionRange) continue; // skip out of range
-        const key = `${x}-${y}`;
-        // TODO merge into CELL
-        const arr = this.collectionMap.get(key) || [[], undefined];
-        arr[0].push(structure);
-        if (arr[0].length === 1) {
-          // TODO use marching squares to draw the collecting area. Draw each elevation separately
-          arr[1] = this.scene.add.sprite(x * GRID, y * GRID, 'cell_green').setDepth(500).setOrigin(0, 0).setAlpha(0.4);
-          this.collectionSpriteSet.add(arr[1]);
-        }
-        this.collectionMap.set(key, arr);
-        this.energyCollecting = this.collectionMap.size * 0.005;
-        this.scene.observer.emit(EVENT_ENERGY_PRODUCTION_CHANGE, this.energyCollecting + this.energyProducing);
+  // stopCollecting(structure: BaseStructure) {
+  //   if (structure.CLASS.energyCollectionRange === 0 || !BaseStructure.activeStructureIds.has(structure.id)) return;
+  //   const {coordX, coordY, CLASS: {energyCollectionRange}} = structure;
 
-      }
-    }
-  }
-
-  stopCollecting(structure: BaseStructure) {
-    if (structure.CLASS.energyCollectionRange === 0 || !BaseStructure.activeStructureIds.has(structure.id)) return;
-    const {coordX, coordY, CLASS: {energyCollectionRange}} = structure;
-
-    for (let y = coordY - energyCollectionRange; y <= coordY + energyCollectionRange; y++) {
-      for (let x = coordX - energyCollectionRange; x <= coordX + energyCollectionRange; x++) {
-        if (x < 0 || y < 0 || x >= this.world[0].length || y >= this.world.length) continue; // skip out of bounds
-        const manhattanDistance = Math.abs(coordX - x) + Math.abs(coordY - y);
-        if (manhattanDistance > energyCollectionRange) continue; // skip out of range
-        const key = `${x}-${y}`;
-        const arr = this.collectionMap.get(key) || [[], undefined];
-        const index = arr[0].findIndex(s => s.id === structure.id);
-        if (index === -1) continue;
-        arr[0].splice(index, 1);
-        this.collectionMap.set(key, arr);
-        this.energyCollecting = this.collectionMap.size * 0.005;
-        this.scene.observer.emit(EVENT_ENERGY_PRODUCTION_CHANGE, this.energyCollecting + this.energyProducing);
-        if (arr[0].length === 0 && arr[1]) {
-          arr[1]?.destroy();
-          this.collectionSpriteSet.delete(arr[1]);
-        }
-      }
-    }
-  }
+  //   for (let y = coordY - energyCollectionRange; y <= coordY + energyCollectionRange; y++) {
+  //     for (let x = coordX - energyCollectionRange; x <= coordX + energyCollectionRange; x++) {
+  //       if (x < 0 || y < 0 || x >= this.world[0].length || y >= this.world.length) continue; // skip out of bounds
+  //       const manhattanDistance = Math.abs(coordX - x) + Math.abs(coordY - y);
+  //       if (manhattanDistance > energyCollectionRange) continue; // skip out of range
+  //       const key = `${x}-${y}`;
+  //       const arr = this.collectionMap.get(key) || [[], undefined];
+  //       const index = arr[0].findIndex(s => s.id === structure.id);
+  //       if (index === -1) continue;
+  //       arr[0].splice(index, 1);
+  //       this.collectionMap.set(key, arr);
+  //       // this.energyCollecting = this.collectionMap.size * 0.005;
+  //       // this.scene.observer.emit(EVENT_ENERGY_PRODUCTION_CHANGE, this.energyCollecting + this.energyProducing);
+  //       if (arr[0].length === 0 && arr[1]) {
+  //         arr[1]?.destroy();
+  //         // this.collectionSpriteSet.delete(arr[1]);
+  //       }
+  //     }
+  //   }
+  // }
 
   previewStructure(coordX: number | null, coordY: number | null, unitClass: Unit | null) {
     if (coordX === null || coordY === null || coordX < 0 || coordY < 0 || coordX >= level.sizeX || coordY >= level.sizeY) return; // skip out of bounds
@@ -194,7 +208,8 @@ export class Network {
   }
 
   placeUnit(coordX: number, coordY: number, ref: BaseStructure) {
-    if (this.world[coordY][coordX].ref) return;
+    const cellIndex = coordY * (level.sizeX + 1) + coordX;
+    if (this.world[cellIndex].ref) return;
     this.graph.createVertex(ref.id, ref.x, ref.y, ref);
     this.remoteGraph.createVertex(ref.id, ref.x, ref.y, {x: ref.x, y: ref.y});
     if (ref instanceof City) this.root = ref;
@@ -228,7 +243,7 @@ export class Network {
       const euclideanDistance = Math.sqrt(Math.pow(ref.x - cell.ref.x, 2) + Math.pow(ref.y - cell.ref.y, 2));
       if (manhattanDistance > cell.ref.CLASS.connectionRange || Math.round(euclideanDistance) === 0) continue; // won't connect if neighbour has a smaller connection range
       const angle = Math.atan2(cell.ref.y - ref.y, cell.ref.x - ref.x);
-      const sprite = this.scene.add.sprite(ref.x, ref.y, this.getEdgeSpriteTexture(euclideanDistance)).setDepth(499).setOrigin(0, 0.5).setRotation(angle);
+      const sprite = this.scene.add.sprite(ref.x, ref.y, this.getEdgeSpriteTexture(euclideanDistance)).setDepth(Depth.NETWORK).setOrigin(0, 0.5).setRotation(angle);
       this.graph.createEdge(ref.id, cell.ref.id, euclideanDistance, sprite);
       this.remoteGraph.createEdge(ref.id, cell.ref.id, euclideanDistance, 'sprite placeholder');
     }
@@ -261,10 +276,11 @@ export class Network {
       this.remoteGraph.edges.then(e => e.delete(edge.id));
     });
 
-    const ref = this.world[vert.data.coordY][vert.data.coordX].ref;
+    const cellIndex = vert.data.yCoord * (level.sizeX + 1) + vert.data.xCoord;
+    const ref = this.world[cellIndex].ref; // TODO store cell index on vert.data. maybe merge with cell?
     if (ref) {
       ref.hit(ref.CLASS.healthMax);
-      this.world[vert.data.coordY][vert.data.coordX].ref = null;
+      this.world[vert.data.yCoord][vert.data.xCoord].ref = null;
     }
     this.graph.removeVertex(id);
     this.remoteGraph.removeVertex(id);
@@ -317,7 +333,18 @@ export interface EnergyRequest {
 }
 
 export interface Cell {
+  cellIndex: number;
   x: number;
   y: number;
+  xCoord: number;
+  yCoord: number;
   ref: BaseStructure | null;
+
+  // fluidElevation: number;
+  // terrainElevation: number;
+
+  edgeIndexTL: number;
+  edgeIndexTR: number;
+  edgeIndexBL: number;
+  edgeIndexBR: number;
 }
