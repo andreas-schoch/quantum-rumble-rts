@@ -1,17 +1,14 @@
-import { DEFAULT_WIDTH, DEFAULT_ZOOM, GRID, MAX_ZOOM, MIN_ZOOM, TICK_RATE, SceneKeys, EVENT_UNIT_SELECTION_CHANGE, level } from '../constants';
-import { UNITS, Unit } from '..';
-import { City } from '../units/City';
-import { Network } from '../Network';
-import { BaseStructure } from '../units/BaseUnit';
-import { Renderer } from '../terrain/Terrain';
+import { DEFAULT_WIDTH, DEFAULT_ZOOM, GRID, MAX_ZOOM, MIN_ZOOM, TICK_RATE, SceneKeys, EVENT_UNIT_SELECTION_CHANGE, level, EntityProps } from '../constants';
+import { SELECTABLE_UNITS } from '..';
 import { Simulation } from '../terrain/TerrainSimulation';
 import { Tilemaps } from 'phaser';
+import { PhaserRenderer } from '../terrain/Terrain';
+import { Previewer } from '../Previewer';
+import { canPlaceEntityAt } from '../util';
 
 export default class GameScene extends Phaser.Scene {
   observer: Phaser.Events.EventEmitter = new Phaser.Events.EventEmitter();
   controls!: Phaser.Cameras.Controls.SmoothedKeyControl;
-  city!: City;
-  network!: Network;
 
   pointerX: number | null = null;
   pointerY: number | null = null;
@@ -20,13 +17,12 @@ export default class GameScene extends Phaser.Scene {
   sfx_start_collect: Phaser.Sound.BaseSound;
   sfx_place_structure: Phaser.Sound.BaseSound;
   tickCounter: number;
-  // gameRenderer: GameRenderer;
-  private selectedUnitClass: Unit | null;
-  // simulation: Remote<TerrainSimulation>;
+  selectedUnit: EntityProps | null;
   simulation: Simulation;
   tilemap: Tilemaps.Tilemap;
   tileset: Tilemaps.Tileset | null;
   isPaused = false;
+  previewer: Previewer;
 
   constructor() {
     super({key: SceneKeys.GAME_SCENE});
@@ -36,32 +32,15 @@ export default class GameScene extends Phaser.Scene {
     this.sfx_start_collect = this.sound.add('start_collect', {detune: 600, rate: 1.25, volume: 0.5 , loop: false});
     this.sfx_place_structure = this.sound.add('place_structure', {detune: 200, rate: 1.25, volume: 1 , loop: false});
 
-    // this.tilemap = this.make.tilemap({tileWidth: GRID, tileHeight: GRID, width: level.sizeX, height: level.sizeY, insertNull: true});
-    // this.tileset = this.tilemap.addTilesetImage("terrain", "terrain", GRID, GRID, 0, 2, 0);
-    // if (!this.tileset) throw new Error('tileset is null');
-
-    // for (const {elevation, depth} of config.terrainLayers) {
-    //   const layer = this.tilemap.createBlankLayer('terrain_' + elevation, this.tileset);
-    //   if (!layer) throw new Error('layer is null');
-    //   layer.setDepth(depth);
-    // }
-
     this.scene.launch(SceneKeys.GAME_UI_SCENE, [this, () => {
       this.scene.restart();
     }]);
 
     this.setupCameraAndInput();
     this.observer.removeAllListeners();
-    this.simulation = new Simulation();
-    this.network = new Network(this);
 
-    const index = level.cityCoords.yCoord * (level.sizeX + 1) + level.cityCoords.xCoord;
-    const elevation = this.simulation.terrainData[index];
-    this.city = new City(this, Math.floor(level.cityCoords.xCoord), Math.floor(level.cityCoords.yCoord), elevation);
-    this.network.placeUnit(this.city.xCoord, this.city.yCoord, this.city);
-    level.emitters.forEach(em => this.simulation.addEmitter(em));
-    const renderer = new Renderer(this, this.simulation);
-
+    this.simulation = new Simulation(this, this.observer, new PhaserRenderer(this));
+    this.previewer = new Previewer(this, this.simulation.state);
     this.tickCounter = 0;
     // Only rendering related things should happen every frame. I potentially want to be able to simulate this game on a server, so it needs to be somewhat deterministic
     this.time.addEvent({
@@ -70,10 +49,7 @@ export default class GameScene extends Phaser.Scene {
       callback: () => {
         if (this.isPaused) return;
         this.tickCounter++;
-        this.simulation.tick(this.tickCounter);
-        renderer.tick(this.tickCounter);
-        this.network.tick(this.tickCounter);
-        for(const structure of BaseStructure.structuresInUpdatePriorityOrder) structure.tick(this.tickCounter);
+        this.simulation.step(this.tickCounter);
       },
       callbackScope: this,
       loop: true
@@ -158,26 +134,24 @@ export default class GameScene extends Phaser.Scene {
       const pointerCoordX = Math.floor(worldX / GRID);
       const pointerCoordY = Math.floor(worldY / GRID);
       // Compare with previous to avoid unnecessary updates
-      if (!p.isDown && this.selectedUnitClass && (this.pointerCoordX !== pointerCoordX || this.pointerCoordY !== pointerCoordY)) {
-        this.network.previewStructure(pointerCoordX, pointerCoordY, this.selectedUnitClass);
+      if (!p.isDown && this.selectedUnit && (this.pointerCoordX !== pointerCoordX || this.pointerCoordY !== pointerCoordY)) {
+        this.previewer.previewEntity(pointerCoordX, pointerCoordY, this.selectedUnit);
         this.pointerCoordX = pointerCoordX;
         this.pointerCoordY = pointerCoordY;
       }
     });
 
     input.on('pointerdown', (p: Phaser.Input.Pointer) => {
-      if (!this.selectedUnitClass) return;
+      if (!this.selectedUnit) return;
       this.pointerCoordX = Math.floor(p.worldX / GRID);
       this.pointerCoordY = Math.floor(p.worldY / GRID);
       const {pointerCoordX, pointerCoordY} = this;
       if (pointerCoordX === null || pointerCoordY === null) return;
       if (pointerCoordX < 0 || pointerCoordY < 0 || pointerCoordX > level.sizeX || pointerCoordY > level.sizeY) return; // skip out of bounds
 
-      if (this.selectedUnitClass) {
-        const index = pointerCoordY * (level.sizeX + 1) + pointerCoordX;
-        const elevation = this.simulation.terrainData[index];
-        const unit = new this.selectedUnitClass(this, pointerCoordX, pointerCoordY, elevation);
-        this.network.placeUnit(pointerCoordX, pointerCoordY, unit);
+      if (this.selectedUnit) {
+        if (!canPlaceEntityAt(pointerCoordX, pointerCoordY, this.simulation.state)) return;
+        this.simulation.addEntity({active: true, xCoord: pointerCoordX, yCoord: pointerCoordY, props: this.selectedUnit});
       }
       // else console.log('TODO implement select'); // TODO find structure under click and select it (show info about it in the UI)
     });
@@ -190,10 +164,10 @@ export default class GameScene extends Phaser.Scene {
   }
 
   private selectUnit(index: number, notifyUI = true) {
-    const unitClass: Unit | null = UNITS[index] || null;
-    this.network.previewCancel();
-    this.network.previewStructure(this.pointerCoordX, this.pointerCoordY, unitClass);
-    this.selectedUnitClass = unitClass;
+    const unitProps: EntityProps | null = SELECTABLE_UNITS[index] || null;
+    this.previewer.previewCancel();
+    this.previewer.previewEntity(this.pointerCoordX, this.pointerCoordY, unitProps);
+    this.selectedUnit = unitProps;
     notifyUI && this.observer.emit(EVENT_UNIT_SELECTION_CHANGE,  index);
   }
 }

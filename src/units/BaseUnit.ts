@@ -1,94 +1,165 @@
-import { GRID, HALF_GRID, level } from '../constants';
-import { Unit } from '..';
-import { EnergyRequest } from '../Network';
+import { Depth, GRID, HALF_GRID, level, SerializableEntityData, EntityProps as EntityProps, THRESHOLD, config, TICK_DELTA } from '../constants';
+import { Cell, EnergyRequest } from '../terrain/TerrainSimulation';
 import { PathfinderResult } from '../Graph';
-import GameScene from '../scenes/GameScene';
+import { computeTerrainElevation, computeClosestCellIndicesInRange, generateId, computeFluidElevation } from '../util';
+import { Simulation } from '../terrain/TerrainSimulation';
 
-// In hindsight, OOP wasn't the right choice for units. I would like to refactor it using the ECS pattern but cannot be bothered to do it now.
-export abstract class BaseStructure {
+export class Unit implements SerializableEntityData {
   id: string;
+  xCoord: number;
+  yCoord: number;
+  active: boolean;
+  props: EntityProps;
+
   x: number;
   y: number;
   cellIndex: number;
+
   energyPath: PathfinderResult<{x: number, y: number}> = {found: false, distance: Infinity, path: []};
-
-  static structuresInUpdatePriorityOrder: BaseStructure[] = [];
-  static structuresById: Map<string, BaseStructure> = new Map();
-  static activeStructureIds: Set<string> = new Set(); // only the ones in here will receive energy of any type
-
-  static energyCollectionRange = 0; // max energy collection manhattan distance
-  static energyStorageCapacity = 0;
-  static energyProduction = 0; // different from collecting, this produces without the need to occupy cells
-  static connectionRange = 5; // max manhattan distance to other structures to be able to connect to them
-  static updatePriority = 1; // higher means it will be updated first
-  static speedIncrease = 0; // px per second
-  static isRelay = false; // whether this structure can relay energy
-  static movable = false;
-
-  static buildCost: number;
-  static unitName: string;
-  static healthMax: number;
-
-  isEnergyRoot = false;
-
   findPathAsyncInProgress = false;
+
+  sprites: Phaser.GameObjects.Sprite[] = [];
+  ammoCircle: Phaser.GameObjects.Graphics;
+  mortarShells: Phaser.GameObjects.Sprite[] = [];
+  blast: Phaser.GameObjects.Graphics;
+
   destroyed = false;
   built = false;
-  sprite: Phaser.GameObjects.Sprite | null = null;
+  remainingBuildCost: number;
   healthCurrent = 0;
-  buildCost: number;
+  ammoCurrent = 0;
+  lastAttack: number;
+  lastEnergyRequest: number;
+  cellIndicesInAttackRange: number[] = []; // sorted by distance
 
   pendingBuild: EnergyRequest[] = [];
   pendingHealth: EnergyRequest[] = [];
-  CLASS: Unit;
-  static type = 'structure';
+  pendingAmmo: EnergyRequest[] = [];
+  particleImpact: Phaser.GameObjects.Particles.ParticleEmitter;
+  blastSprite: Phaser.GameObjects.Sprite;
+  textureKeysBlast: Set<string> = new Set();
+  energyRequestCooldown = 10; // every 10 ticks (500ms)
 
-  constructor(public scene: GameScene, public xCoord: number, public yCoord: number, public elevation: number) {
-    this.id = Math.random().toString(36).substring(2, 10);
-    this.x = xCoord * GRID + HALF_GRID;
-    this.y = yCoord * GRID + HALF_GRID;
-    this.cellIndex = yCoord * (level.sizeX + 1) + xCoord;
-    BaseStructure.structuresById.set(this.id, this);
-    this.buildCost = this.constructor['buildCost'];
-    this.CLASS = Object.getPrototypeOf(this).constructor; // TODO I dont like this. get rid of it
+  constructor(private simulation: Simulation, data: SerializableEntityData) {
+    this.id = data.id || generateId();
+    this.xCoord = data.xCoord;
+    this.yCoord = data.yCoord;
+    this.x = data.xCoord * GRID + HALF_GRID;
+    this.y = data.yCoord * GRID + HALF_GRID;
+    this.active = data.active;
+    this.props = data.props;
+
+    this.cellIndex = data.yCoord * (level.sizeX + 1) + data.xCoord;
+
+    const elevation = computeTerrainElevation(this.cellIndex, simulation.state);
+    if (elevation % (THRESHOLD * 3) !== 0) throw new Error('Structure must be placed on a cell where all 4 edges are on the same elevation layer');
+
+    this.remainingBuildCost = this.props.buildCost || 0;
+
+    this.particleImpact = this.simulation.scene.add.particles(0, 0, 'energy_red', {
+      frequency: -1,
+      lifespan: 200,
+      speed: {min: 200, max: 300},
+      scale: {start: 0.4, end: 0.2},
+      quantity: 1,
+      blendMode: 'ADD',
+    }).setDepth(Depth.PARTICLE_IMPACT);
+
+    this.sprites = data.props.spriteKeys?.map(key => simulation.scene.add.sprite(this.x, this.y, key).setDepth(Depth.UNIT).setAlpha(0.3));
+
+    if (data.props.unitName === 'Blaster') {
+      const indices = computeClosestCellIndicesInRange(this.simulation.state.cells, this.xCoord, this.yCoord, this.props.attackRadius);
+      this.cellIndicesInAttackRange = indices.filter(i => simulation.state.terrainData[i] <= elevation);
+      this.ammoCircle = simulation.scene.add.graphics().setDepth(Depth.AMMO_CIRCLE);
+      this.blastSprite = simulation.scene.add.sprite(this.x, this.y, this.getBlastSpriteTexture(this.props.attackRadius * GRID)).setDepth(Depth.MORTAR_SHELL).setVisible(false).setOrigin(0, 0.25);
+      this.renderAmmo();
+    } else if (data.props.unitName === 'Mortar') {
+      const indices = computeClosestCellIndicesInRange(this.simulation.state.cells, this.xCoord, this.yCoord, this.props.attackRadius);
+      this.cellIndicesInAttackRange = indices.filter(i => simulation.state.terrainData[i] <= elevation);
+      this.ammoCircle = simulation.scene.add.graphics().setDepth(Depth.AMMO_CIRCLE);
+      this.mortarShells.push(simulation.scene.add.sprite(this.x, this.y, 'Mortar_shell').setDepth(Depth.MORTAR_SHELL).setScale(1).setVisible(false));
+      this.mortarShells.push(simulation.scene.add.sprite(this.x, this.y, 'Mortar_shell').setDepth(Depth.MORTAR_SHELL).setScale(1).setVisible(false));
+      this.mortarShells.push(simulation.scene.add.sprite(this.x, this.y, 'Mortar_shell').setDepth(Depth.MORTAR_SHELL).setScale(1).setVisible(false));
+      this.sprites[1].setVisible(false);
+    }
+
+    if (data.props.buildCost === 0) this.build(1);
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  tick(tickCounter: number):  void | true {
-    if (this.destroyed) return;
-    if (!this.energyPath.found && !this.isEnergyRoot && !this.findPathAsyncInProgress) return this.findPathAsync();
-
-    if (!this.isEnergyRoot && !this.energyPath.found) return;
-
-    // if (!BaseStructure.structuresById.has(this.energyPath.path[0].id)) return; // No energy source
-    if (!this.built && this.buildCost !== 0 && this.pendingBuild.length < this.buildCost)
-      this.pendingBuild.push(this.scene.network.requestEnergy('build', 1, this));
-    else if (this.healthCurrent < this.CLASS.healthMax && this.pendingHealth.length < this.CLASS.healthMax - this.healthCurrent)
-      this.pendingHealth.push(this.scene.network.requestEnergy('health', 1, this));
-    else if (!this.built && this.buildCost === 0)
-      this.build(1);
-
-    return true;
+  step(tickCounter: number) {
+    if (this.props.unitName === 'City') {
+      // TODO
+    } else if (this.props.unitName === 'Collector') {
+      this.checkSelfDamage();
+      this.checkEnergyNeeds(tickCounter);
+    } else if (this.props.unitName === 'Relay') {
+      this.checkSelfDamage();
+      this.checkEnergyNeeds(tickCounter);
+    } else if (this.props.unitName === 'Blaster') {
+      this.checkSelfDamage();
+      this.checkEnergyNeeds(tickCounter);
+      this.selfHeal();
+      this.blasterAttack(tickCounter);
+    } else if (this.props.unitName === 'Mortar') {
+      this.checkSelfDamage();
+      this.checkEnergyNeeds(tickCounter);
+      this.selfHeal();
+      this.mortarAttack(tickCounter);
+    } else if (this.props.unitName === 'Storage') {
+      this.checkSelfDamage();
+      this.checkEnergyNeeds(tickCounter);
+    } else if (this.props.unitName === 'Speed') {
+      this.checkSelfDamage();
+      this.checkEnergyNeeds(tickCounter);
+    } else if (this.props.unitName === 'Reactor') {
+      this.checkSelfDamage();
+      this.checkEnergyNeeds(tickCounter);
+    } else if (this.props.unitName === 'Emitter') {
+      this.emit(tickCounter);
+    }
   }
 
-  activate() {
-    this.scene.network.world[this.cellIndex].ref = this;
-    this.sprite && this.sprite.clearTint();
-    BaseStructure.activeStructureIds.add(this.id);
-    BaseStructure.structuresInUpdatePriorityOrder.push(this);
-    BaseStructure.structuresInUpdatePriorityOrder.sort((a, b) => b.CLASS.updatePriority - a.CLASS.updatePriority);
-    if (!this.isEnergyRoot) this.energyPath = this.scene.network.findPathToEnergySource(this);
-    // this.preview = false;
-    this.healthCurrent = this.CLASS.healthMax;
+  private checkEnergyNeeds(tickCounter: number) {
+    if (this.destroyed || !this.active) return;
+
+    if (!this.energyPath.found && !this.findPathAsyncInProgress) return this.findPathAsync();
+
+    if (tickCounter - this.lastEnergyRequest <= this.energyRequestCooldown) return;
+
+    if (this.built) {
+      if (this.ammoCurrent < this.props.ammoMax && this.pendingAmmo.length < this.props.ammoMax - this.ammoCurrent) {
+        this.lastEnergyRequest = tickCounter;
+        this.pendingAmmo.push(this.simulation.requestEnergy('ammo', 1, this));
+      }
+    } else {
+      if (this.remainingBuildCost !== 0 && this.pendingBuild.length < this.remainingBuildCost) {
+        this.lastEnergyRequest = tickCounter;
+        this.pendingBuild.push(this.simulation.requestEnergy('build', 1, this));
+      } else if (this.remainingBuildCost === 0) {
+        this.build(1);
+      }
+    }
   }
 
-  deactivate() {
-    // if (this.preview) return;
-    BaseStructure.activeStructureIds.delete(this.id);
-    BaseStructure.structuresInUpdatePriorityOrder = BaseStructure.structuresInUpdatePriorityOrder.filter(s => s.id !== this.id);
-    if (this.CLASS.energyCollectionRange) this.scene.simulation.removeCollector(this.id);
-    // if (this.energyProduction) this.scene.network.energyProducing -= this.energyProduction;
-    // if (this.energyStorageCapacity) this.scene.network.energyStorageMax -= this.energyStorageCapacity;
+  private selfHeal() {
+    if (this.props.healthRegenPerSecond && this.healthCurrent < this.props.healthMax)
+      this.healthCurrent = Math.min(this.healthCurrent + this.props.healthRegenPerSecond, this.props.healthMax);
+  }
+
+  private emit(tickCounter: number) {
+    if (!this.active) return;
+    if (this.props.fluidDelay > tickCounter) return;
+    if (this.props.fluidEmitEveryNthFrame > 1  && tickCounter % this.props.fluidEmitEveryNthFrame !== 1) return;
+    const max = config.terrain.elevationMax + config.fluid.overflow;
+    const amountPerTickAndEdge = (this.props.fluidPerSecond * TICK_DELTA);
+    const amount = Math.min(Math.max(amountPerTickAndEdge, 0), max);
+    const cell = this.simulation.state.cells[this.cellIndex];
+
+    // amount is intentionally not divided by 4
+    this.simulation.state.fluidData[cell.edgeIndexTL] = amount;
+    this.simulation.state.fluidData[cell.edgeIndexTR] = amount;
+    this.simulation.state.fluidData[cell.edgeIndexBL] = amount;
+    this.simulation.state.fluidData[cell.edgeIndexBR] = amount;
   }
 
   hit(amount: number) {
@@ -97,84 +168,210 @@ export abstract class BaseStructure {
   }
 
   receiveEnergy(request: EnergyRequest): void {
-    if (this.destroyed) throw new Error('This structure is already destroyed');
+    if (this.destroyed) return;
     if (!request) throw new Error('This structure does not have a pending energy request with that id');
     if (request.type === 'build') {
       this.build(request.amount);
       this.pendingBuild = this.pendingBuild.filter(r => r.id !== request.id);
-    } else if (request.type === 'health') {
-      this.heal(request.amount);
-      this.pendingHealth = this.pendingHealth.filter(r => r.id !== request.id);
+    } else if (request.type === 'ammo') {
+      this.ammoCurrent = Math.min(this.ammoCurrent + request.amount, this.props.ammoMax);
+      this.pendingAmmo = this.pendingAmmo.filter(r => r.id !== request.id);
+      if (this.ammoCircle) this.renderAmmo();
     }
   }
 
-  protected findPathAsync() {
+  private findPathAsync() {
     this.findPathAsyncInProgress = true;
-    this.scene.network.findPathToEnergySourceAsync(this).then(path => {
+    this.simulation.findPathToEnergySourceAsync(this).then(path => {
       this.energyPath = path;
       this.findPathAsyncInProgress = false;
     });
   }
 
-  protected destroy() {
-    this.sprite?.destroy();
-    // if (this.preview) return;
+  private build(amount: number) {
+    if (this.built || this.destroyed) return;
+    this.remainingBuildCost = Math.max(this.remainingBuildCost - amount, 0);
+    if (this.remainingBuildCost > 0) return;
+
+    this.built = true;
+    this.healthCurrent = this.props.healthMax;
+    this.sprites.forEach(sprite => sprite.setAlpha(1));
+    if (this.props.collectionRadius) {
+      this.simulation.state.collectorDataNeedsRefresh = true;
+      this.simulation.state.collectorIds.add(this.id);
+    }
+    if (this.props.energyProduction) this.simulation.state.energyProducing += this.props.energyProduction;
+    if (this.props.energyStorageCapacity) this.simulation.state.energyStorageMax += this.props.energyStorageCapacity;
+    if (this.props.speedIncrease) this.simulation.state.energyTravelSpeed += this.props.speedIncrease;
+    if (this.props.fluidPerSecond) this.simulation.state.emitterIds.add(this.id);
+  }
+
+  destroy() {
+    if (this.destroyed) return;
+    this.sprites.forEach(sprite => sprite.destroy());
+    if (this.ammoCircle) this.ammoCircle.destroy();
     this.destroyed = true;
-    this.deactivate();
-    BaseStructure.structuresById.delete(this.id);
-    BaseStructure.activeStructureIds.delete(this.id);
-    this.scene.network.world[this.cellIndex].ref = null;
-    // TODO Base class does to much. Move specific stuff to subclasses
-    if (this.CLASS.energyStorageCapacity) this.scene.network.energyStorageMax -= this.CLASS.energyStorageCapacity;
-    if (this.CLASS.energyProduction) this.scene.network.energyProducing -= this.CLASS.energyProduction;
-    if (this.CLASS.speedIncrease) this.scene.network.speed -= this.CLASS.speedIncrease;
+    this.healthCurrent = 0;
+    this.simulation.removeEntity(this.id);
+
+    if (this.props.energyStorageCapacity) this.simulation.state.energyStorageMax -= this.props.energyStorageCapacity;
+    if (this.props.energyProduction) this.simulation.state.energyProducing -= this.props.energyProduction;
+    if (this.props.speedIncrease) this.simulation.state.energyTravelSpeed -= this.props.speedIncrease;
+    if (this.props.collectionRadius) this.simulation.state.collectorDataNeedsRefresh = true;
+    if (this.props.collectionRadius) this.simulation.state.collectorIds.delete(this.id);
+    if (this.props.fluidPerSecond) this.simulation.state.emitterIds.delete(this.id);
 
   }
 
-  protected heal(amount: number) {
-    if (this.destroyed) throw new Error('This structure is already destroyed');
-    this.healthCurrent = Math.min(this.healthCurrent + amount, this.CLASS.healthMax);
-  }
+  private renderAmmo() {
+    if (this.props.unitName !== 'Blaster' && this.props.unitName !== 'Mortar') return;
+    const rotation = -45; // Make it so it appears to start and end at the top
+    this.ammoCircle.clear();
+    this.ammoCircle.setDepth(Depth.AMMO_CIRCLE);
+    this.ammoCircle.setPosition(this.x, this.y);
+    this.ammoCircle.setRotation(Phaser.Math.DegToRad(rotation));
+    this.ammoCircle.lineStyle(1, 0x000000, 1);
+    this.ammoCircle.fillStyle(0xff0000, 1);
+    const degrees = 360 * (this.ammoCurrent / this.props.ammoMax);
+    this.ammoCircle.slice(0, 0, GRID - 1, Phaser.Math.DegToRad(rotation), Phaser.Math.DegToRad(rotation + degrees));
+    this.ammoCircle.fillPath();
 
-  protected build(amount: number) {
-    if (this.destroyed) throw new Error('This structure is already destroyed');
-    if (this.built) throw new Error('This structure is already built');
-    this.buildCost = Math.max(this.buildCost - amount, 0);
-    if (this.buildCost <= 0) {
-      if (this.CLASS.energyCollectionRange) this.scene.simulation.addCollector({id: this.id, xCoord: this.xCoord, yCoord: this.yCoord, radius: this.CLASS.energyCollectionRange, elevation: this.elevation});
-      this.healthCurrent = this.CLASS.healthMax;
-      if (this.CLASS.energyProduction) this.scene.network.energyProducing += this.CLASS.energyProduction;
-      if (this.CLASS.energyStorageCapacity) this.scene.network.energyStorageMax += this.CLASS.energyStorageCapacity;
-      if (this.CLASS.speedIncrease) this.scene.network.speed += this.CLASS.speedIncrease;
-      this.sprite?.setAlpha(1);
-      this.built = true;
+    if (this.props.unitName === 'Mortar') {
+      const shellVisible = this.ammoCurrent >= this.props.ammoCost;
+      this.sprites[1].setVisible(shellVisible);
     }
   }
 
-  protected draw() { /* no-op */ }
-
-  canMoveTo(coordX: number, coordY: number) {
-    const index = coordY * (level.sizeX + 1) + coordX;
-    const ref = this.scene.network.world[index].ref;
-    return ref === null || ref === this;
+  private getBlastSpriteTexture(euclideanDistance: number): string {
+    const key = `blast-${Math.round(euclideanDistance)}`;
+    if (!this.textureKeysBlast.has(key)) {
+      console.log('----Creating new blast texture', key);
+      const WIDTH = 5;
+      const graphics = this.simulation.scene.add.graphics();
+      graphics.lineStyle(WIDTH, 0xff0000, 1);
+      graphics.lineBetween(HALF_GRID * 3, 0, euclideanDistance, 0);
+      graphics.generateTexture(key, euclideanDistance, WIDTH);
+      graphics.destroy();
+      this.textureKeysBlast.add(key);
+    }
+    return key;
   }
 
-  move(coordX: number, coordY: number): void | true {
+  move(coordX: number, coordY: number) {
     const newCellIndex = coordY * (level.sizeX + 1) + coordX;
-    if (this.scene.network.world[newCellIndex].ref === this) return;
-    if (!this.CLASS.movable || this.destroyed) throw new Error('This structure is not movable or already destroyed');
+    if (this.simulation.state.cells[newCellIndex].ref === this) return;
+    if (!this.props.movable || this.destroyed) throw new Error('This structure is not movable or already destroyed');
     this.xCoord = coordX;
     this.yCoord = coordY;
     this.x = coordX * GRID + HALF_GRID;
     this.y = coordY * GRID + HALF_GRID;
 
-    if (this.sprite) this.sprite.setPosition(this.x, this.y);
+    this.sprites.forEach(sprite => sprite.setPosition(this.x, this.y));
 
-    const cellBefore = this.scene.network.world[this.cellIndex];
-    const cellAfter = this.scene.network.world[newCellIndex];
+    const cellBefore = this.simulation.state.cells[this.cellIndex];
+    const cellAfter = this.simulation.state.cells[newCellIndex];
 
     cellBefore.ref = null;
     cellAfter.ref = this;
-    return true;
   }
+
+  blasterAttack(tickCounter: number) {
+    if (this.ammoCurrent < this.props.ammoCost) return;
+    if (tickCounter - this.lastAttack <= this.props.attackCooldown) return;
+
+    for (const index of this.cellIndicesInAttackRange) {
+      const cell = this.simulation.state.cells[index];
+      const fluidElevation = computeFluidElevation(index, this.simulation.state);
+      if (fluidElevation >= THRESHOLD) {
+        this.ammoCurrent -= this.props.ammoCost;
+        this.lastAttack = tickCounter;
+        this.renderAmmo();
+
+        // Rotate the Blaster_top sprite towards the target
+        const dx = cell.xCoord - this.xCoord;
+        const dy = cell.yCoord - this.yCoord;
+        const angle = Math.atan2(dy, dx);
+        const degrees = Phaser.Math.RadToDeg(angle);
+        this.sprites[1].setAngle(degrees + 90); // +90 because the Blaster_top sprite is rotated 90 degrees
+        this.simulation.fluidChangeRequest(cell.xCoord, cell.yCoord, -this.props.damage, this.props.damagePattern);
+
+        this.blastSprite.setTexture(this.getBlastSpriteTexture(Math.sqrt((cell.x - this.x) ** 2 + (cell.y - this.y) ** 2)));
+        setTimeout(() => this.blastSprite.setVisible(false).setActive(false), 75);
+        this.blastSprite.setAngle(degrees);
+        this.blastSprite.setVisible(true).setActive(true);
+        this.particleImpact.explode(20, cell.x, cell.y);
+        break;
+      }
+    }
+  }
+
+  mortarAttack(tickCounter: number) {
+    if (this.ammoCurrent < this.props.ammoCost) return;
+    if (tickCounter - this.lastAttack <= this.props.attackCooldown) return;
+
+    // Find cell with highest fluid elevation in attack range
+    let highestFluidCell: Cell | null = null;
+    let highestFluidElevation = 0;
+
+    for (const index of this.cellIndicesInAttackRange) {
+      const cell = this.simulation.state.cells[index];
+      const fluidElevation = computeFluidElevation(index, this.simulation.state);
+
+      if (fluidElevation < THRESHOLD) continue;
+
+      if (highestFluidCell === null || fluidElevation > highestFluidElevation) {
+        highestFluidCell = cell;
+        highestFluidElevation = fluidElevation;
+      }
+    }
+
+    if (highestFluidCell === null) return;
+
+    this.ammoCurrent -= this.props.ammoCost;
+    this.lastAttack = tickCounter;
+    this.renderAmmo();
+
+    // duration adjusted by distance so it flies longer the further away the target is
+    const distance = Math.sqrt((highestFluidCell.x - this.x) ** 2 + (highestFluidCell.y - this.y) ** 2);
+    const maxDistance = this.props.attackRadius * GRID;
+    const TOTAL_DURATION = 1500 * (distance / maxDistance);
+    const tween = this.simulation.scene.tweens.add({
+      targets: this.mortarShells[0],
+      x: { value: highestFluidCell.x, duration: TOTAL_DURATION, ease: 'Linear' },
+      y: { value: highestFluidCell.y, duration: TOTAL_DURATION, ease: 'Linear' },
+      scaleX: { value: 1.5, duration: TOTAL_DURATION / 2, yoyo: true, repeat: 0, ease: 'Bounce.inOut' },
+      scaleY: { value: 1.5, duration: TOTAL_DURATION / 2, yoyo: true, repeat: 0, ease: 'Bounce.inOut' },
+      angle: { value: 1080, duration: TOTAL_DURATION, ease: 'Linear' },
+      onStart: () => {
+        const shell = this.mortarShells.shift();
+        shell?.setPosition(this.x, this.y);
+        shell?.setVisible(true);
+        if (!shell) throw new Error('No more mortar shells');
+        this.mortarShells.push(shell);
+      },
+      onComplete: () => {
+        (tween.targets[0] as Phaser.GameObjects.Sprite).setVisible(false);
+        if (!highestFluidCell) throw new Error('cell is null');
+        this.simulation.fluidChangeRequest(highestFluidCell.xCoord, highestFluidCell.yCoord, -this.props.damage, this.props.damagePattern);
+        this.particleImpact.explode(30, highestFluidCell.x, highestFluidCell.y);
+      },
+    });
+
+  }
+
+  private checkSelfDamage() {
+    if (this.destroyed || this.props.fluidPerSecond) return;
+    const fluidData = this.simulation.state.fluidData;
+    const {edgeIndexTL, edgeIndexTR, edgeIndexBL, edgeIndexBR} = this.simulation.state.cells[this.cellIndex];
+    const shouldTakeDamage = fluidData[edgeIndexTL] > THRESHOLD || fluidData[edgeIndexTR] > THRESHOLD || fluidData[edgeIndexBR] > THRESHOLD || fluidData[edgeIndexBL] > THRESHOLD;
+    if (shouldTakeDamage) this.hit(1);
+  }
+
 }
+
+// EmitSystem
+// CollectionSystem
+// DamageSystem
+// RegenerationSystem
+// EnergySystem
+//

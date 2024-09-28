@@ -24,7 +24,7 @@ export const ENERGY_PER_COLLECTING_CELL = 0.0025;
 export const SPACE_BETWEEN = 4; // space between generated texture frames
 export const GRID = 16;
 export const HALF_GRID = GRID / 2;
-export const TICK_RATE = 50; // ms
+export const TICK_RATE = 50; // ms (CW1 seems to run at 36 ticks per second according to https://knucklecracker.com/forums/index.php?topic=5177.0)
 export const TICK_DELTA = TICK_RATE / 1000; // it's easier to change tickrate when things are scaled to a second
 
 export const enum SceneKeys {
@@ -37,10 +37,14 @@ export enum Depth {
   TERRAIN = 1,
   Collection,
   NETWORK,
+  AMMO_CIRCLE,
   UNIT,
+  PREVIEW_UNIT,
   ENERGY, // energy ball moving over network
   FLUID,
   EMITTER,
+  MORTAR_SHELL,
+  PARTICLE_IMPACT
 }
 
 export const THRESHOLD = 1000;
@@ -51,8 +55,8 @@ export const config: TerrainConfig = {
     elevationMax: THRESHOLD * 12,
   },
   fluid: {
-    overflow: THRESHOLD * 2, // we need to ensure overflow and elevationMax are never more than MAX_UINT16!
-    flowRate: 0.65,
+    overflow: THRESHOLD * 12, // we need to ensure overflow and elevationMax are never more than MAX_UINT16!
+    flowRate: 0.6,
     evaporation: 5,
   },
   terrainLayers: [
@@ -104,21 +108,338 @@ export interface TerrainRenderConfig {
 
 export type TerrainConfig = TerrainRenderConfig & TerrainSimulationConfig;
 
+export interface SerializableEntityData {
+  id?: string;
+  xCoord: number;
+  yCoord: number;
+  active: boolean;
+  // destroyed: boolean;
+  // elevation: number;
+  props: EntityProps;
+}
+
+// TODO for now to keep it simple I added all properties together. Eventually it will be split up once I refactor all into ECS
+export interface EntityProps {
+  // Common
+  unitName: string;
+
+  // Common for placable units and City
+  healthMax: number;
+  healthRegenPerSecond: number;
+  spriteKeys: string[];
+  size: '3x3' | '9x9';
+  buildCost: number;
+  isRelay: boolean; // whether this unit can relay energy to other units in connectionRange
+  movable: boolean;
+  connectionRadius: number; // can only connect to other units within this distance
+
+  //
+  collectionRadius: number; // can collect energy from cells within this distance
+  energyProduction: number; // different from collecting, this produces without the need to occupy cells
+  energyStorageCapacity: number;
+  speedIncrease: number; // makes energy packet travel X px per second faster
+  isEnergyRoot: boolean;
+
+  // weapon specific
+  ammoCost: number;
+  ammoMax: number;
+  attackCooldown: number;
+  attackRadius: number;
+  damage: number;
+  damagePattern: [number, number][];
+
+  // emitter specific
+  fluidPerSecond: number;
+  fluidEmitEveryNthFrame: number; // how many ticks it pauses before emitting again
+  fluidDelay: number; // how many ticks it waits before emitting the first time
+}
+
+export const UNIT_CONFIG: Record<string, EntityProps> = {
+  'City': {
+    unitName: 'City',
+    size: '9x9',
+    spriteKeys: ['City'],
+    buildCost: 0,
+    connectionRadius: 19,
+    collectionRadius: 7,
+    energyProduction: 0.8,
+    energyStorageCapacity: 20,
+    healthMax: 8000,
+    healthRegenPerSecond: 1,
+    speedIncrease: 0,
+    movable: false,
+    isRelay: true,
+    isEnergyRoot: true,
+    // weapon specific
+    ammoCost: 0,
+    ammoMax: 0,
+    attackCooldown: 0,
+    attackRadius: 0,
+    damage: 0,
+    damagePattern: [],
+    // emitter specific
+    fluidPerSecond: 0,
+    fluidEmitEveryNthFrame: 0,
+    fluidDelay: 0,
+  },
+  'Collector': {
+    unitName: 'Collector',
+    size: '3x3',
+    spriteKeys: ['Collector'],
+    buildCost: 5,
+    connectionRadius: 9,
+    collectionRadius: 5,
+    energyProduction: 0,
+    energyStorageCapacity: 0,
+    healthMax: 1,
+    healthRegenPerSecond: 0,
+    speedIncrease: 0,
+    movable: false,
+    isRelay: true,
+    isEnergyRoot: false,
+    // weapon specific
+    ammoCost: 0,
+    ammoMax: 0,
+    attackCooldown: 0,
+    attackRadius: 0,
+    damage: 0,
+    damagePattern: [],
+    // emitter specific
+    fluidPerSecond: 0,
+    fluidEmitEveryNthFrame: 0,
+    fluidDelay: 0,
+  },
+  'Relay': {
+    unitName: 'Relay',
+    size: '3x3',
+    spriteKeys: ['Relay'],
+    buildCost: 20,
+    connectionRadius: 19,
+    collectionRadius: 0,
+    energyProduction: 0,
+    energyStorageCapacity: 0,
+    healthMax: 1,
+    healthRegenPerSecond: 0,
+    speedIncrease: 0,
+    movable: false,
+    isRelay: true,
+    isEnergyRoot: false,
+    // weapon specific
+    ammoCost: 0,
+    ammoMax: 0,
+    attackCooldown: 0,
+    attackRadius: 0,
+    damage: 0,
+    damagePattern: [],
+    // emitter specific
+    fluidPerSecond: 0,
+    fluidEmitEveryNthFrame: 0,
+    fluidDelay: 0,
+  },
+  'Blaster': {
+    unitName: 'Blaster',
+    size: '3x3',
+    spriteKeys: ['Blaster', 'Blaster_top'],
+    buildCost: 25,
+    connectionRadius: 9,
+    collectionRadius: 0,
+    energyProduction: 0,
+    energyStorageCapacity: 0,
+    healthMax: 150,
+    healthRegenPerSecond: 1,
+    speedIncrease: 0,
+    movable: true,
+    isRelay: false,
+    isEnergyRoot: false,
+    // weapon specific
+    ammoCost: 0.2,
+    ammoMax: 10,
+    attackCooldown: 4,
+    attackRadius: 6,
+    damage: THRESHOLD * 32,
+    damagePattern: [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, -1], [1, -1], [-1, 1]],
+    // emitter specific
+    fluidPerSecond: 0,
+    fluidEmitEveryNthFrame: 0,
+    fluidDelay: 0,
+  },
+  'Mortar': {
+    unitName: 'Mortar',
+    size: '3x3',
+    spriteKeys: ['Mortar', 'Mortar_shell'],
+    buildCost: 50,
+    connectionRadius: 9,
+    collectionRadius: 0,
+    energyProduction: 0,
+    energyStorageCapacity: 0,
+    healthMax: 200,
+    healthRegenPerSecond: 1,
+    speedIncrease: 0,
+    movable: true,
+    isRelay: false,
+    isEnergyRoot: false,
+    // weapon specific
+    ammoCost: 10 / 3 - 0.01,
+    ammoMax: 20,
+    attackCooldown: 40,
+    attackRadius: 9,
+    damage: THRESHOLD * 256,
+    damagePattern: [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, -1], [1, -1], [-1, 1], [-2, 0], [2, 0], [0, 2], [0, -2]],
+    // emitter specific
+    fluidPerSecond: 0,
+    fluidEmitEveryNthFrame: 0,
+    fluidDelay: 0,
+  },
+  'Storage': {
+    unitName: 'Storage',
+    size: '3x3',
+    spriteKeys: ['Storage'],
+    buildCost: 20,
+    connectionRadius: 9,
+    collectionRadius: 0,
+    energyProduction: 0,
+    energyStorageCapacity: 20,
+    healthMax: 1,
+    healthRegenPerSecond: 0,
+    speedIncrease: 0,
+    movable: false,
+    isRelay: false,
+    isEnergyRoot: false,
+    // weapon specific
+    ammoCost: 0,
+    ammoMax: 0,
+    attackCooldown: 0,
+    attackRadius: 0,
+    damage: 0,
+    damagePattern: [],
+    // emitter specific
+    fluidPerSecond: 0,
+    fluidEmitEveryNthFrame: 0,
+    fluidDelay: 0,
+  },
+  'Speed': {
+    unitName: 'Speed',
+    size: '3x3',
+    spriteKeys: ['Speed'],
+    buildCost: 35,
+    connectionRadius: 9,
+    collectionRadius: 0,
+    energyProduction: 0,
+    energyStorageCapacity: 0,
+    healthMax: 1,
+    healthRegenPerSecond: 0,
+    speedIncrease: GRID * 0.5,
+    movable: false,
+    isRelay: false,
+    isEnergyRoot: false,
+    // weapon specific
+    ammoCost: 0,
+    ammoMax: 0,
+    attackCooldown: 0,
+    attackRadius: 0,
+    damage: 0,
+    damagePattern: [],
+    // emitter specific
+    fluidPerSecond: 0,
+    fluidEmitEveryNthFrame: 0,
+    fluidDelay: 0,
+  },
+  'Reactor': {
+    unitName: 'Reactor',
+    size: '3x3',
+    spriteKeys: ['Reactor'],
+    buildCost: 40,
+    connectionRadius: 9,
+    collectionRadius: 0,
+    energyProduction: 0.4,
+    energyStorageCapacity: 0,
+    healthMax: 1,
+    healthRegenPerSecond: 0,
+    speedIncrease: 0,
+    movable: false,
+    isRelay: false,
+    isEnergyRoot: false,
+    // weapon specific
+    ammoCost: 0,
+    ammoMax: 0,
+    attackCooldown: 0,
+    attackRadius: 0,
+    damage: 0,
+    damagePattern: [],
+    // emitter specific
+    fluidPerSecond: 0,
+    fluidEmitEveryNthFrame: 0,
+    fluidDelay: 0,
+  },
+  'EmitterWeak': {
+    unitName: 'Emitter',
+    size: '3x3',
+    spriteKeys: ['Emitter'],
+    buildCost: 0,
+    connectionRadius: 0,
+    collectionRadius: 0,
+    energyProduction: 0,
+    energyStorageCapacity: 0,
+    healthMax: 0,
+    healthRegenPerSecond: 0,
+    speedIncrease: 0,
+    movable: false,
+    isRelay: false,
+    isEnergyRoot: false,
+    // weapon specific
+    ammoCost: 0,
+    ammoMax: 0,
+    attackCooldown: 0,
+    attackRadius: 0,
+    damage: 0,
+    damagePattern: [],
+    // emitter specific
+    fluidPerSecond: MAX_UINT16 * 2,
+    fluidEmitEveryNthFrame: 1,
+    fluidDelay: 0,
+  },
+  'EmitterRegular': {
+    unitName: 'Emitter',
+    size: '3x3',
+    spriteKeys: ['Emitter'],
+    buildCost: 0,
+    connectionRadius: 0,
+    collectionRadius: 0,
+    energyProduction: 0,
+    energyStorageCapacity: 0,
+    healthMax: 0,
+    healthRegenPerSecond: 0,
+    speedIncrease: 0,
+    movable: false,
+    isRelay: false,
+    isEnergyRoot: false,
+    // weapon specific
+    ammoCost: 0,
+    ammoMax: 0,
+    attackCooldown: 0,
+    attackRadius: 0,
+    damage: 0,
+    damagePattern: [],
+    // emitter specific
+    fluidPerSecond: MAX_UINT16 * 5,
+    fluidEmitEveryNthFrame: 1,
+    fluidDelay: 0,
+  }
+};
+
 export interface Level {
   seed: number;
   sizeX: number;
   sizeY: number;
-  cityCoords: {xCoord: number, yCoord: number};
   noise: {scale: number, offsetX: number, offsetY: number, strength: number, subtract?: boolean}[];
   rects: {xCoord: number, yCoord: number, w: number, h: number, elevation: number}[];
-  emitters: { xCoord: number, yCoord: number, fluidPerSecond: number, ticksCooldown: number, ticksDelay: number, active: boolean}[];
+  entities: SerializableEntityData[];
 }
 
 export const level001: Level = {
   seed: 0.123,
   sizeX: 100,
   sizeY: 100,
-  cityCoords: {xCoord: 50, yCoord: 26},
   noise: [
     {scale: 200, offsetX: 0, offsetY: 0, strength: 2.5},
     {scale: 96, offsetX: 0, offsetY: 0, strength: 2},
@@ -128,14 +449,33 @@ export const level001: Level = {
   rects: [
     {xCoord: 75, yCoord: 25, w: 4, h: 4, elevation: THRESHOLD * 3},
     {xCoord: 75, yCoord: 25, w: 2, h: 2, elevation: 0},
-    {xCoord: 8, yCoord: 12, w: 5, h: 2, elevation: THRESHOLD * 6},
+    {xCoord: 9, yCoord: 12, w: 5, h: 2, elevation: THRESHOLD * 6},
     {xCoord: 32, yCoord: 42, w: 3, h: 3, elevation: THRESHOLD * 6},
     {xCoord: 24, yCoord: 52, w: 3, h: 3, elevation: THRESHOLD * 9},
+
+    {xCoord: 19, yCoord: 45, w: 7, h: 3, elevation: 0},
+    {xCoord: 25, yCoord: 46, w: 7, h: 3, elevation: 0},
+    {xCoord: 30, yCoord: 47, w: 5, h: 5, elevation: 0},
+
+    {xCoord: 9, yCoord: 3, w: 1, h: 5, elevation: 0},
+    {xCoord: 8, yCoord: 7, w: 1, h: 5, elevation: 0},
+    {xCoord: 7, yCoord: 10, w: 1, h: 5, elevation: 0},
+    {xCoord: 6, yCoord: 14, w: 1, h: 5, elevation: 0},
+
+    {xCoord: 42, yCoord: 24, w: 2, h: 3, elevation: THRESHOLD * 3},
+    {xCoord: 40, yCoord: 26, w: 2, h: 3, elevation: THRESHOLD * 3},
+    // {xCoord: 36, yCoord: 28, w: 4, h: 3, elevation: THRESHOLD * 3},
+    // {xCoord: 41, yCoord: 21, w: 2, h: 3, elevation: THRESHOLD * 3},
   ],
-  emitters: [
-    {xCoord: 19, yCoord: 36, fluidPerSecond: MAX_UINT16 * 10, ticksCooldown: 1, ticksDelay: 0, active: true},
-    {xCoord: 10, yCoord: 75, fluidPerSecond: MAX_UINT16 * 10, ticksCooldown: 1, ticksDelay: 0, active: true},
-    {xCoord: 78, yCoord: 54, fluidPerSecond: MAX_UINT16 * 10, ticksCooldown: 1, ticksDelay: 0, active: true},
+  entities: [
+    {id: 'city', xCoord: 50, yCoord: 26, active: true, props: UNIT_CONFIG['City']},
+    {id: 'emitter1', xCoord: 19, yCoord: 36, active: true, props: UNIT_CONFIG['EmitterWeak']},
+    {id: 'emitter2', xCoord: 10, yCoord: 75, active: true, props: UNIT_CONFIG['EmitterWeak']},
+    {id: 'emitter3', xCoord: 78, yCoord: 54, active: true, props: UNIT_CONFIG['EmitterWeak']},
+    {id: 'collector1', xCoord: 42, yCoord: 30, active: true, props: UNIT_CONFIG['Collector']},
+    {id: 'collector2', xCoord: 44, yCoord: 20, active: true, props: UNIT_CONFIG['Collector']},
+    {id: 'collector3', xCoord: 50, yCoord: 15, active: true, props: UNIT_CONFIG['Collector']},
+    // {id: 'Mortar1', xCoord: 38, yCoord: 32, active: true, props: UNIT_CONFIG['Mortar']},
   ],
 };
 

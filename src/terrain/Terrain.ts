@@ -1,23 +1,19 @@
 import { MarchingSquares } from './MarchingSquares';
 
-import { config, Depth, GRID, HALF_GRID, level, SPACE_BETWEEN, THRESHOLD } from '../constants';
-import { GameObjects } from 'phaser';
+import { config, Depth, GRID, level, SPACE_BETWEEN, THRESHOLD } from '../constants';
 import GameScene from '../scenes/GameScene';
 import { getVisibleBounds } from '../util';
-import { CollectionInfo, EmitterInfo, Simulation } from './TerrainSimulation.js';
+import { Cell, RenderingAdapter } from './TerrainSimulation';
 
-export class Renderer {
+export class PhaserRenderer implements RenderingAdapter {
   readonly marchingSquares: MarchingSquares;
   private fluidToTerrainAbove: Record<number, number> = {};
-
-  private emitterSprites: Map<EmitterInfo['id'], GameObjects.Sprite> = new Map();
-  private collectorSprites: Map<CollectionInfo['id'], GameObjects.Sprite> = new Map();
 
   private rtTerrain: Phaser.GameObjects.RenderTexture;
   private rtFluid: Phaser.GameObjects.RenderTexture;
   private rtCollection: Phaser.GameObjects.RenderTexture;
 
-  constructor(private scene: GameScene, private simulation: Simulation) {
+  constructor(private scene: GameScene) {
     const width = level.sizeX * GRID;
     const height = level.sizeY * GRID;
     this.rtTerrain = this.scene.make.renderTexture({x: 0, y: 0, width, height}, true).setDepth(Depth.TERRAIN).setOrigin(0, 0);
@@ -32,26 +28,15 @@ export class Renderer {
     }
 
     this.generateLayers();
-    this.renderTerrain();
-    // this.renderCollectionArea();
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  tick(tickCounter: number) {
-    this.renderFluid();
-    if (this.simulation.lastChangeTick.collection === tickCounter) this.renderCollectionArea();
-    if (this.simulation.lastChangeTick.emitters === tickCounter) this.renderEmitters();
-  }
-
-  private renderTerrain() {
+  renderTerrain(world: Cell[], terrainData: Uint16Array) {
     // console.time('renderTerrain');
-    const world = this.scene.network.world;
     // BOTTOM LAYER
     const graphics = this.scene.add.graphics();
     const BASE_TERRAIN_COLOR = 0x544741;
     graphics.fillStyle(BASE_TERRAIN_COLOR, 1);
     graphics.fillRect(0, 0, level.sizeX * GRID, level.sizeY * GRID);
-    const terrainData = this.simulation.terrainData;
     // ELEVATION LAYERS
     this.rtTerrain.beginDraw();
     this.rtTerrain.batchDraw(graphics, 0, 0, 1);
@@ -72,39 +57,27 @@ export class Renderer {
         const shape = this.marchingSquares.getShapeIndex(tl, tr, br, bl, elevation);
         this.rtTerrain.batchDrawFrame(key, shape, x, y, 1);
       }
-
     }
 
     this.rtTerrain.endDraw();
     graphics.destroy();
-    // console.timeEnd('renderTerrain');
   }
 
-  private renderCollectionArea() {
-    const cd = this.simulation.collectionData;
+  renderCollectionArea(world: Cell[], cd: Uint8Array) {
     this.rtCollection.clear();
     this.rtCollection.beginDraw();
-    for (const {edgeIndexTL, edgeIndexTR, edgeIndexBL, edgeIndexBR, xCoord, yCoord} of this.scene.network.world) {
-    // for (let yCoord = 0; yCoord < level.sizeY; yCoord++) {
-      // const rowOffset = level.sizeX + 1;
-      // for (let xCoord = 0; xCoord < level.sizeX; xCoord++) {
-      // const indexTL = yCoord * rowOffset + xCoord;
-      // const indexTR = indexTL + 1;
-      // const indexBL = indexTL + rowOffset;
-      // const indexBR = indexTR + rowOffset;
-
+    for (const {edgeIndexTL, edgeIndexTR, edgeIndexBL, edgeIndexBR, xCoord, yCoord} of world) {
       const shape = this.marchingSquares.getShapeIndex(cd[edgeIndexTL], cd[edgeIndexTR], cd[edgeIndexBR], cd[edgeIndexBL], 1);
       if (shape === 0) continue;
       this.rtCollection.batchDrawFrame('collection_area', shape, xCoord * GRID, yCoord * GRID);
     }
-    // }
-
     this.rtCollection.endDraw();
   }
 
-  private renderFluid(): void {
+  renderFluid(world: Cell[], fluid: Uint16Array, terrain: Uint16Array): void {
     // console.time('renderFluid');
     this.rtFluid.clear();
+    this.rtFluid.setBlendMode(Phaser.BlendModes.NORMAL);
     this.rtFluid.beginDraw();
     const bounds = getVisibleBounds(this.scene);
     if (!bounds) return;
@@ -115,34 +88,25 @@ export class Renderer {
     const endY = Math.min(bounds.coordY + bounds.numCoordsY, level.sizeY);
     const endX = Math.min(bounds.coordX + bounds.numCoordsX, level.sizeX);
 
-    const fluid = this.simulation.fluidData;
-    const terrain = this.simulation.terrainData;
     const rowOffset = level.sizeX + 1;
 
     for (let y = startY; y <= endY; y++) {
       for (let x = startX; x <= endX; x++) {
-        const indexTL = y * rowOffset + x;
-        const indexTR = indexTL + 1;
-        const indexBL = indexTL + rowOffset;
-        const indexBR = indexTR + rowOffset;
+        const cell = world[y * rowOffset + x];
+        const terrainTL = terrain[cell.edgeIndexTL];
+        const terrainTR = terrain[cell.edgeIndexTR];
+        const terrainBR = terrain[cell.edgeIndexBR];
+        const terrainBL = terrain[cell.edgeIndexBL];
 
-        const terrainTL = terrain[indexTL];
-        const terrainTR = terrain[indexTR];
-        const terrainBR = terrain[indexBR];
-        const terrainBL = terrain[indexBL];
+        let fluidTL = fluid[cell.edgeIndexTL];
+        let fluidTR = fluid[cell.edgeIndexTR];
+        let fluidBR = fluid[cell.edgeIndexBR];
+        let fluidBL = fluid[cell.edgeIndexBL];
 
-        let fluidTL = fluid[indexTL];
-        let fluidTR = fluid[indexTR];
-        let fluidBR = fluid[indexBR];
-        let fluidBL = fluid[indexBL];
-
-        if (fluidTL >= THRESHOLD) fluidTL += terrain[indexTL];
-        if (fluidTR >= THRESHOLD) fluidTR += terrain[indexTR];
-        if (fluidBR >= THRESHOLD) fluidBR += terrain[indexBR];
-        if (fluidBL >= THRESHOLD) fluidBL += terrain[indexBL];
-
-        const posX = x * GRID;
-        const posY = y * GRID;
+        if (fluidTL >= THRESHOLD) fluidTL += terrain[cell.edgeIndexTL];
+        if (fluidTR >= THRESHOLD) fluidTR += terrain[cell.edgeIndexTR];
+        if (fluidBR >= THRESHOLD) fluidBR += terrain[cell.edgeIndexBR];
+        if (fluidBL >= THRESHOLD) fluidBL += terrain[cell.edgeIndexBL];
 
         let shapeBelow = -1;
         for (const {elevation} of config.fluidLayers) {
@@ -158,7 +122,7 @@ export class Renderer {
           const shapeTerrainAbove = this.marchingSquares.getShapeIndex(terrainTL, terrainTR, terrainBR, terrainBL, this.fluidToTerrainAbove[elevation]);
           if (shapeTerrainAbove === 15) continue; // no need to render if there is terrain higher than the fluid
           const key = omitLines ? 'fluid_' + elevation + '_noline' : 'fluid_' + elevation;
-          this.rtFluid.batchDrawFrame(key, shape, posX, posY);
+          this.rtFluid.batchDrawFrame(key, shape, cell.x, cell.y);
           // this.rtFluid.batchDrawFrame('fluid_' + elevation, shape, posX, posY);
           shapeBelow = shape;
         }
@@ -166,14 +130,6 @@ export class Renderer {
     }
     this.rtFluid.endDraw();
     // console.timeEnd('renderFluid');
-  }
-
-  private renderEmitters() {
-    for (const emitter of this.simulation.emitters.values()) {
-      if (this.emitterSprites.has(emitter.id)) continue;
-      const emitterSprite = this.scene.add.sprite(emitter.xCoord * GRID + HALF_GRID, emitter.yCoord * GRID + HALF_GRID, 'emitter').setOrigin(0.5, 0.5).setDepth(Depth.EMITTER);
-      this.emitterSprites.set(emitter.id, emitterSprite);
-    }
   }
 
   private generateLayers() {

@@ -2,13 +2,7 @@ import { Game, WEBGL } from 'phaser';
 import GameScene from './scenes/GameScene';
 import PreloadScene from './scenes/PreloadScene';
 import GameUIScene from './scenes/GameUIScene';
-import { DEFAULT_WIDTH, RESOLUTION_SCALE, DEFAULT_HEIGHT, DEBUG } from './constants';
-import { Collector } from './units/Collector';
-import { Reactor } from './units/Reactor';
-import { Relay } from './units/Relay';
-import { Speed } from './units/Speed';
-import { Storage } from './units/Storage';
-import { BaseWeaponStructure } from './units/BaseWeaponUnit';
+import { DEFAULT_WIDTH, RESOLUTION_SCALE, DEFAULT_HEIGHT, DEBUG, EntityProps, UNIT_CONFIG } from './constants';
 
 const config: Phaser.Types.Core.GameConfig = {
   render: {
@@ -42,15 +36,13 @@ window.addEventListener('load', () => {
   }
 });
 
-export type Unit = typeof Collector | typeof Relay | typeof BaseWeaponStructure | typeof Storage | typeof Speed | typeof Reactor;
-export const UNITS: Unit[] = [
-  Collector,
-  Relay,
-  BaseWeaponStructure,
-  BaseWeaponStructure,
-  BaseWeaponStructure,
-  BaseWeaponStructure,
-  Storage,
-  Speed,
-  Reactor
+// export type Unit = typeof Collector | typeof Relay | typeof BaseWeaponStructure | typeof Storage | typeof Speed | typeof Reactor;
+export const SELECTABLE_UNITS: EntityProps[] = [
+  UNIT_CONFIG['Collector'],
+  UNIT_CONFIG['Relay'],
+  UNIT_CONFIG['Blaster'],
+  UNIT_CONFIG['Mortar'],
+  UNIT_CONFIG['Storage'],
+  UNIT_CONFIG['Speed'],
+  UNIT_CONFIG['Reactor']
 ];

@@ -1,9 +1,8 @@
 import { GameObjects, Scene } from 'phaser';
-import { DEFAULT_WIDTH, EVENT_UNIT_SELECTION_CHANGE, SceneKeys } from '../constants';
-import { UNITS as UNIT_CLASSES } from '..';
-import { Collector } from '../units/Collector';
+import { DEFAULT_WIDTH, EVENT_UNIT_SELECTION_CHANGE, SceneKeys, UNIT_CONFIG } from '../constants';
 import { EVENT_ENERGY_CONSUMPTION_CHANGE, EVENT_ENERGY_PRODUCTION_CHANGE, EVENT_ENERGY_STORAGE_CHANGE } from '../constants';
 import GameScene from './GameScene';
+import { SELECTABLE_UNITS } from '../index';
 
 export default class GameUIScene extends Scene {
   private observer: Phaser.Events.EventEmitter;
@@ -40,9 +39,9 @@ export default class GameUIScene extends Scene {
     // INIT UNIT SELECTOR
     const unitList = document.querySelector('#unit-selector')!;
     const unitTemplate: HTMLTemplateElement | null = document.getElementById('unit-template') as HTMLTemplateElement;
-    UNIT_CLASSES.forEach((unit, i) => {
+    Object.values(SELECTABLE_UNITS).forEach((unit, i) => {
       const clone = unitTemplate.content.cloneNode(true) as HTMLElement;
-      (clone.querySelector('.unit-img') as HTMLImageElement).src = this.textures.getBase64(unit.unitName) || this.textures.getBase64(Collector.unitName);
+      (clone.querySelector('.unit-img') as HTMLImageElement).src = this.textures.getBase64(unit.unitName) || this.textures.getBase64(UNIT_CONFIG['Collector'].unitName);
       clone.querySelector('.unit')!.id = unit.unitName;
       clone.querySelector('.unit-name')!.innerHTML = unit.unitName;
       clone.querySelector('.unit-cost')!.innerHTML = String(unit.buildCost);
