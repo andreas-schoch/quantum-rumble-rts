@@ -45,7 +45,7 @@ export class Previewer {
 
   private previewConnections(coordX: number, coordY: number, previewUnitProps: EntityProps) {
     this.previewEdgeRenderTexture.clear();
-    for (const [cell, distance] of getCellsInRange(coordX, coordY, previewUnitProps.connectionRadius, false, this.state)) {
+    for (const [cell, distance] of getCellsInRange(this.state, coordX, coordY, previewUnitProps.connectionRadius, false)) {
       if (!cell.ref) continue;
       if (!cell.ref.props.isRelay && !previewUnitProps.isRelay) continue; // non-relay structures cannot connect to each other
       if (distance > cell.ref.props.connectionRadius) continue; // won't connect if neighbour has a smaller connection range

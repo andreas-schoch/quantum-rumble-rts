@@ -2,10 +2,10 @@ import { MarchingSquares } from './MarchingSquares';
 
 import { config, Depth, GRID, level, SPACE_BETWEEN, THRESHOLD } from '../constants';
 import GameScene from '../scenes/GameScene';
-import { getVisibleBounds } from '../util';
-import { Cell, RenderingAdapter } from './TerrainSimulation';
+import { generateId, getVisibleBounds } from '../util';
+import { Cell, Energy, EnergyRequest, RenderingAdapter, SimulationState } from './TerrainSimulation';
 
-export class PhaserRenderer implements RenderingAdapter {
+export class Renderer implements RenderingAdapter {
   readonly marchingSquares: MarchingSquares;
   private fluidToTerrainAbove: Record<number, number> = {};
 
@@ -75,7 +75,6 @@ export class PhaserRenderer implements RenderingAdapter {
   }
 
   renderFluid(world: Cell[], fluid: Uint16Array, terrain: Uint16Array): void {
-    // console.time('renderFluid');
     this.rtFluid.clear();
     this.rtFluid.setBlendMode(Phaser.BlendModes.NORMAL);
     this.rtFluid.beginDraw();
@@ -112,10 +111,6 @@ export class PhaserRenderer implements RenderingAdapter {
         for (const {elevation} of config.fluidLayers) {
           const shape = this.marchingSquares.getShapeIndex(fluidTL, fluidTR, fluidBR, fluidBL, elevation);
           if (shape === 0) break; // above layers will also be empty if this one is
-          // const omitLines = shapeBelow !== 15 &&
-          //                   (shapeBelow === shape) ||
-          //                   (shapeBelow === 9 && shape === 1 || shape === 8) ||
-          //                   (shapeBelow === 12 && shape === 4 || shape === 8);
 
           const omitLines = shapeBelow === shape;
 
@@ -123,13 +118,29 @@ export class PhaserRenderer implements RenderingAdapter {
           if (shapeTerrainAbove === 15) continue; // no need to render if there is terrain higher than the fluid
           const key = omitLines ? 'fluid_' + elevation + '_noline' : 'fluid_' + elevation;
           this.rtFluid.batchDrawFrame(key, shape, cell.x, cell.y);
-          // this.rtFluid.batchDrawFrame('fluid_' + elevation, shape, posX, posY);
           shapeBelow = shape;
         }
       }
     }
     this.rtFluid.endDraw();
-    // console.timeEnd('renderFluid');
+  }
+
+  renderEnergyBall(state: SimulationState, request: EnergyRequest) {
+    const energyPath = request.requester.energyPath;
+    const points = energyPath.path.reduce<number[]>((acc, cur) => acc.concat(cur.x, cur.y), []);
+    const path = this.scene.add.path(points[0], points[1]);
+    for (let i = 2; i < points.length; i += 2) path.lineTo(points[i], points[i + 1]);
+    const texture = request.type === 'ammo' ? 'energy_red' : 'energy';
+    const duration = (energyPath.distance / state.energyTravelSpeed) * 1000;
+    // TODO do this in a phaser agnostic way. Don't use followers, or at least only for visual representation
+    const energyBall: Energy = {follower: this.scene.add.follower(path, points[0], points[1], texture), id: generateId()};
+    energyBall.follower.setScale(1).setDepth(Depth.ENERGY);
+    energyBall.follower.startFollow({duration, repeat: 0, onComplete: () => {
+      // TODO while the rendering of the energy ball should be part of the renderer, the actual receiveEnergy should be handled by the simulation
+      // Try to refactor in a way where the simulation steers the position of the energy ball, then the renderer only needs to update the visual representation
+      energyBall.follower.destroy();
+      request.requester.receiveEnergy(request);
+    }});
   }
 
   private generateLayers() {

@@ -10,7 +10,7 @@ export interface SimulationState {
   cells: Cell[];
   root: Unit | null;
   graph: Graph<Unit, Phaser.GameObjects.Sprite>;
-  remoteGraph: Remote<Graph>;
+  remoteGraph: Remote<Graph>; // Computed within worker
 
   // the below data represents the "edges" of the cells indicating the fluid level, terrain elevation or collection area
   prevFluidData: Uint16Array;
@@ -85,7 +85,6 @@ export class Simulation {
   }
 
   step(tickCounter: number) {
-
     this.updateEnergy(tickCounter);
     this.fluidFlow(tickCounter);
     this.updateCollectorData();
@@ -120,7 +119,7 @@ export class Simulation {
     return request;
   }
 
-  protected sendEnergyBall(request: EnergyRequest) {
+  private sendEnergyBall(request: EnergyRequest) {
     const energyPath = request.requester.energyPath;
     const points = energyPath.path.reduce<number[]>((acc, cur) => acc.concat(cur.x, cur.y), []);
     const path = this.scene.add.path(points[0], points[1]);
@@ -142,7 +141,7 @@ export class Simulation {
     this.state.remoteGraph.createVertex(entity.id, entity.x, entity.y, {x: entity.x, y: entity.y});
 
     // Connect the node to its neighbours if they are within range
-    for (const [cell, manhattanDistance] of getCellsInRange(entity.xCoord, entity.yCoord, entity.props.connectionRadius, true, this.state)) {
+    for (const [cell, manhattanDistance] of getCellsInRange(this.state, entity.xCoord, entity.yCoord, entity.props.connectionRadius, true)) {
       if (!cell.ref) continue;
       if (!cell.ref.props.isRelay && !entity.props.isRelay) continue; // non-relay structures cannot connect to each other
       if (cell.ref.id === entity.id) continue;
@@ -180,7 +179,7 @@ export class Simulation {
       const request = this.state.energyRequests.shift()!;
       this.state.energyStorageCurrent -= request.amount;
       this.state.energyConsumedPerSecond += request.amount;
-      this.sendEnergyBall(request);
+      this.renderingAdapter.renderEnergyBall(this.state, request);
     }
 
     // TODO this doesn't need to be an event. The outside world can just read the value
@@ -325,14 +324,14 @@ export class Simulation {
 
         this.state.cells.push({
           cellIndex,
-          x: xCoord * GRID,
-          y: yCoord * GRID,
-          xCoord,
-          yCoord,
           edgeIndexTL,
           edgeIndexTR,
           edgeIndexBL,
           edgeIndexBR,
+          xCoord,
+          yCoord,
+          x: xCoord * GRID,
+          y: yCoord * GRID,
           cellIndexTop: isTopEdge ? null : cellIndex - level.sizeX - 1,
           cellIndexRight: isLeftEdge ? null : cellIndex - 1,
           cellIndexLeft: isBottomEdge ? null : cellIndex + level.sizeX + 1,
@@ -341,7 +340,8 @@ export class Simulation {
           cellIndexTopRight: (isTopEdge || isRightEdge) ? null : cellIndex - level.sizeX,
           cellIndexBottomLeft: (isBottomEdge || isLeftEdge) ? null : cellIndex + level.sizeX,
           cellIndexBottomRight: (isBottomEdge || isRightEdge) ? null : cellIndex + level.sizeX + 2,
-          ref: null});
+          ref: null
+        });
       }
     }
   }
@@ -383,44 +383,6 @@ export class Simulation {
     }
 
     this.renderingAdapter.renderTerrain(this.state.cells, this.state.terrainData);
-  }
-
-  removeStructure(id: string) {
-    const vert = this.state.graph.vertices.get(id);
-    if (!vert) return;
-
-    this.state.graph.edgesByVertex.get(id)?.forEach(edge => {
-      const otherVertId = edge.vertA === id ? edge.vertB : edge.vertA;
-      this.state.graph.edgesByVertex.get(otherVertId)?.filter(e => e.id !== edge.id);
-      edge.data.destroy();
-      this.state.graph.edges.delete(edge.id);
-      this.state.remoteGraph.edges.then(e => e.delete(edge.id));
-    });
-
-    const cellIndex = vert.data.yCoord * (level.sizeX + 1) + vert.data.xCoord;
-    const ref = this.state.cells[cellIndex].ref; // TODO store cell index on vert.data. maybe merge with cell?
-    if (ref) {
-      ref.hit(ref.props.healthMax);
-      this.state.cells[vert.data.yCoord][vert.data.xCoord].ref = null;
-    }
-    this.state.graph.removeVertex(id);
-    this.state.remoteGraph.removeVertex(id);
-  }
-
-  findPathToEnergySource(structure: Unit): PathfinderResult<Unit> {
-    if (!this.state.root) throw new Error('root is null');
-    const start = this.state.root.id;
-    const end = structure.id;
-    const res = this.state.graph.findPath(start, end, 'euclidian');
-    let invalid = false;
-    for (const vert of res.path) {
-      if (vert.data.id === structure.id) continue;
-      if (!vert.data.built) {
-        invalid = true;
-        break;
-      }
-    }
-    return invalid ? { path: [], distance: Infinity, found: false } : res;
   }
 
   async findPathToEnergySourceAsync(structure: Unit): Promise<PathfinderResult<{x: number, y: number}>> {
@@ -483,4 +445,5 @@ export interface RenderingAdapter {
   renderTerrain(world: Cell[], terrainData: Uint16Array): void;
   renderCollectionArea(world: Cell[], cd: Uint8Array): void;
   renderFluid(world: Cell[], fluid: Uint16Array, terrain: Uint16Array): void;
+  renderEnergyBall(state: SimulationState, request: EnergyRequest): void;
 }

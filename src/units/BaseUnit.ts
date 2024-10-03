@@ -30,6 +30,7 @@ export class Unit implements SerializableEntityData {
   ammoCurrent = 0;
   lastAttack: number;
   lastEnergyRequest: number;
+  lastPathFindAttempt: number;
   cellIndicesInAttackRange: number[] = []; // sorted by distance
 
   pendingBuild: EnergyRequest[] = [];
@@ -68,13 +69,13 @@ export class Unit implements SerializableEntityData {
     this.sprites = data.props.spriteKeys?.map(key => simulation.scene.add.sprite(this.x, this.y, key).setDepth(Depth.UNIT).setAlpha(0.3));
 
     if (data.props.unitName === 'Blaster') {
-      const indices = computeClosestCellIndicesInRange(this.simulation.state.cells, this.xCoord, this.yCoord, this.props.attackRadius);
+      const indices = computeClosestCellIndicesInRange(this.simulation.state, this.xCoord, this.yCoord, this.props.attackRadius);
       this.cellIndicesInAttackRange = indices.filter(i => simulation.state.terrainData[i] <= elevation);
       this.ammoCircle = simulation.scene.add.graphics().setDepth(Depth.AMMO_CIRCLE);
       this.blastSprite = simulation.scene.add.sprite(this.x, this.y, this.getBlastSpriteTexture(this.props.attackRadius * GRID)).setDepth(Depth.MORTAR_SHELL).setVisible(false).setOrigin(0, 0.25);
       this.renderAmmo();
     } else if (data.props.unitName === 'Mortar') {
-      const indices = computeClosestCellIndicesInRange(this.simulation.state.cells, this.xCoord, this.yCoord, this.props.attackRadius);
+      const indices = computeClosestCellIndicesInRange(this.simulation.state, this.xCoord, this.yCoord, this.props.attackRadius);
       this.cellIndicesInAttackRange = indices.filter(i => simulation.state.terrainData[i] <= elevation);
       this.ammoCircle = simulation.scene.add.graphics().setDepth(Depth.AMMO_CIRCLE);
       this.mortarShells.push(simulation.scene.add.sprite(this.x, this.y, 'Mortar_shell').setDepth(Depth.MORTAR_SHELL).setScale(1).setVisible(false));
@@ -122,7 +123,10 @@ export class Unit implements SerializableEntityData {
   private checkEnergyNeeds(tickCounter: number) {
     if (this.destroyed || !this.active) return;
 
-    if (!this.energyPath.found && !this.findPathAsyncInProgress) return this.findPathAsync();
+    if (!this.energyPath.found && !this.findPathAsyncInProgress) {
+      this.findPathAsync(tickCounter);
+      return;
+    }
 
     if (tickCounter - this.lastEnergyRequest <= this.energyRequestCooldown) return;
 
@@ -180,8 +184,10 @@ export class Unit implements SerializableEntityData {
     }
   }
 
-  private findPathAsync() {
+  private findPathAsync(tickCounter: number) {
+    if (tickCounter - this.lastPathFindAttempt < 20) return;
     this.findPathAsyncInProgress = true;
+    this.lastPathFindAttempt = tickCounter;
     this.simulation.findPathToEnergySourceAsync(this).then(path => {
       this.energyPath = path;
       this.findPathAsyncInProgress = false;
@@ -220,7 +226,6 @@ export class Unit implements SerializableEntityData {
     if (this.props.collectionRadius) this.simulation.state.collectorDataNeedsRefresh = true;
     if (this.props.collectionRadius) this.simulation.state.collectorIds.delete(this.id);
     if (this.props.fluidPerSecond) this.simulation.state.emitterIds.delete(this.id);
-
   }
 
   private renderAmmo() {
@@ -245,7 +250,6 @@ export class Unit implements SerializableEntityData {
   private getBlastSpriteTexture(euclideanDistance: number): string {
     const key = `blast-${Math.round(euclideanDistance)}`;
     if (!this.textureKeysBlast.has(key)) {
-      console.log('----Creating new blast texture', key);
       const WIDTH = 5;
       const graphics = this.simulation.scene.add.graphics();
       graphics.lineStyle(WIDTH, 0xff0000, 1);

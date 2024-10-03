@@ -1,8 +1,8 @@
 import { GameObjects } from 'phaser';
 import { GRID, level, THRESHOLD } from './constants';
-import { Cell, SimulationState } from './terrain/TerrainSimulation.js';
+import { Cell, SimulationState } from './terrain/TerrainSimulation';
 
-export function getVisibleBounds(scene: Phaser.Scene): CoordBounds | null {
+export function getVisibleBounds(scene: Phaser.Scene): {coordX: number, coordY: number, numCoordsX: number, numCoordsY: number} | null {
   const { x, y, width, height } = scene.cameras.main.worldView;
 
   const MAX_WIDTH = level.sizeX * GRID;
@@ -20,13 +20,6 @@ export function getVisibleBounds(scene: Phaser.Scene): CoordBounds | null {
   const coordX = Phaser.Math.Clamp(Math.floor(x / GRID) - 1, 0, level.sizeX - 1);
   const coordY = Phaser.Math.Clamp(Math.floor(y / GRID) - 1, 0, level.sizeY - 1);
   return { coordX, coordY, numCoordsX, numCoordsY };
-}
-
-export interface CoordBounds {
-  coordX: number;
-  coordY: number;
-  numCoordsX: number;
-  numCoordsY: number;
 }
 
 export function drawStar(graphics: GameObjects.Graphics, cx: number, cy: number, spikes: number, outerRadius: number, innerRadius: number) {
@@ -61,28 +54,15 @@ export function generateId(): string {
 }
 
 // Returns all the cells within the range (euclidean distance) of the origin cell and returns them sorted by nearest first
-// For now don't care to optimize as for current usecase it is computed once then cached
-export function computeClosestCellIndicesInRange(world: Cell[], xCoord: number, yCoord: number, radius: number): number[] {
-  const startY = Math.max(yCoord - radius, 0);
-  const startX = Math.max(xCoord - radius, 0);
-  const endY = Math.min(yCoord + radius, level.sizeY);
-  const endX = Math.min(xCoord + radius, level.sizeX);
-
-  const cells: [number, number][] = []; // [distance, cellIndex]
-  for (let y = startY; y <= endY; y++) {
-    for (let x = startX; x <= endX; x++) {
-      const index = y * (level.sizeX + 1) + x;
-      const distance = Math.sqrt((xCoord - x) ** 2 + (yCoord - y) ** 2);
-      if (distance <= radius) cells.push([distance, index]);
-    }
-  }
-
-  cells.sort((a, b) => a[0] - b[0]);
-  return cells.map(cell => cell[1]);
+// For now don't care to optimize as for current usecase it is computed once then cached. If that is not the case anymore try to optimize
+export function computeClosestCellIndicesInRange(state: SimulationState, xCoord: number, yCoord: number, radius: number): number[] {
+  const cells = getCellsInRange(state, xCoord, yCoord, radius, false);
+  cells.sort((a, b) => a[1] - b[1]);
+  return cells.map(cell => cell[0].cellIndex);
 }
 
 // TODO deduplicate with above
-export function getCellsInRange(xCoord: number, yCoord: number, radius: number, occupiedOnly = true, state: SimulationState): [Cell, number][] {
+export function getCellsInRange(state: SimulationState, xCoord: number, yCoord: number, radius: number, occupiedOnly = true): [Cell, number][] {
   const startY = Math.max(yCoord - radius, 0);
   const startX = Math.max(xCoord - radius, 0);
   const endY = Math.min(yCoord + radius, level.sizeY);
@@ -95,7 +75,6 @@ export function getCellsInRange(xCoord: number, yCoord: number, radius: number, 
       const cell = state.cells[index];
 
       if (occupiedOnly && !cell.ref) continue; // skip unoccupied cells only when desired
-      // const distance = Math.abs(x - coordX) + Math.abs(y - coordY); // manhattan distance, not euclidean
       const distance = Math.sqrt((xCoord - x) ** 2 + (yCoord - y) ** 2);
       if (distance > radius) continue; // skip cells that are out of range
       cells.push([cell, distance]);
@@ -111,7 +90,6 @@ export function computeTerrainElevation(cellIndex: number, state: SimulationStat
   const elevationTR = state.terrainData[cell.edgeIndexTR];
   const elevationBL = state.terrainData[cell.edgeIndexBL];
   const elevationBR = state.terrainData[cell.edgeIndexBR];
-  console.log(elevationTL, elevationTR, elevationBL, elevationBR);
   const avgElevation = (elevationTL + elevationTR + elevationBL + elevationBR) / 4;
   return avgElevation;
 }
@@ -134,7 +112,6 @@ export function canPlaceEntityAt(coordX: number, coordY: number, state: Simulati
 
   // Can only place when terrain at center is "flat"
   const terrainElevation = computeTerrainElevation(cellIndex, state);
-  console.log('--elevation', coordX, coordY, cellIndex, terrainElevation);
   if (terrainElevation % (THRESHOLD * 3) !== 0) return false;
 
   // Can only place on cells not occupied by other entities

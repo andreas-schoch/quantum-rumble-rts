@@ -9,7 +9,6 @@ export interface Shape {
   isoLines: Line[];
 }
 
-// TODO make this into a Phaser plugin together with the SculptComponent. Maybe make it possible to easily hookup the renderQueue
 export class MarchingSquares {
   shapeByIndex: Shape[] = [];
 

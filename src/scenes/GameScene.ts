@@ -2,7 +2,7 @@ import { DEFAULT_WIDTH, DEFAULT_ZOOM, GRID, MAX_ZOOM, MIN_ZOOM, TICK_RATE, Scene
 import { SELECTABLE_UNITS } from '..';
 import { Simulation } from '../terrain/TerrainSimulation';
 import { Tilemaps } from 'phaser';
-import { PhaserRenderer } from '../terrain/Terrain';
+import { Renderer } from '../terrain/Renderer';
 import { Previewer } from '../Previewer';
 import { canPlaceEntityAt } from '../util';
 
@@ -39,7 +39,7 @@ export default class GameScene extends Phaser.Scene {
     this.setupCameraAndInput();
     this.observer.removeAllListeners();
 
-    this.simulation = new Simulation(this, this.observer, new PhaserRenderer(this));
+    this.simulation = new Simulation(this, this.observer, new Renderer(this));
     this.previewer = new Previewer(this, this.simulation.state);
     this.tickCounter = 0;
     // Only rendering related things should happen every frame. I potentially want to be able to simulate this game on a server, so it needs to be somewhat deterministic
