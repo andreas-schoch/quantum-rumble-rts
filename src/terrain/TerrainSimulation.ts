@@ -2,7 +2,7 @@ import WebpackWorker from 'worker-loader!../workers/pathFinder.worker.ts';
 import { NoiseFunction2D, createNoise2D } from 'simplex-noise';
 import { config, Depth, ENERGY_PER_COLLECTING_CELL, EVENT_ENERGY_CONSUMPTION_CHANGE, EVENT_ENERGY_PRODUCTION_CHANGE, EVENT_ENERGY_STORAGE_CHANGE, GRID, level, SerializableEntityData, THRESHOLD, TICK_DELTA } from '../constants';
 import { Unit } from '../units/BaseUnit';
-import { generateId, getCellsInRange, getEdgeSpriteTexture } from '../util';
+import { cellIndexAt, generateId, getCellsInRange, getEdgeSpriteTexture } from '../util';
 import { Graph, PathfinderResult } from '../Graph';
 import { Remote, wrap } from 'comlink';
 
@@ -141,16 +141,19 @@ export class Simulation {
     this.state.remoteGraph.createVertex(entity.id, entity.x, entity.y, {x: entity.x, y: entity.y});
 
     // Connect the node to its neighbours if they are within range
-    for (const [cell, manhattanDistance] of getCellsInRange(this.state, entity.xCoord, entity.yCoord, entity.props.connectionRadius, true)) {
+    for (const [cell, distance] of getCellsInRange(this.state, entity.xCoord, entity.yCoord, entity.props.connectionRadius, true)) {
       if (!cell.ref) continue;
       if (!cell.ref.props.isRelay && !entity.props.isRelay) continue; // non-relay structures cannot connect to each other
       if (cell.ref.id === entity.id) continue;
       const euclideanDistance = Math.sqrt(Math.pow(entity.x - cell.ref.x, 2) + Math.pow(entity.y - cell.ref.y, 2));
-      if (manhattanDistance > cell.ref.props.connectionRadius || Math.round(euclideanDistance) === 0) continue; // won't connect if neighbour has a smaller connection range
+      if (distance > cell.ref.props.connectionRadius || Math.round(euclideanDistance) === 0) continue; // won't connect if neighbour has a smaller connection range
       const angle = Math.atan2(cell.ref.y - entity.y, cell.ref.x - entity.x);
       // TDOO try to get rid of sprite
       const sprite = this.scene.add.sprite(entity.x, entity.y, getEdgeSpriteTexture(this.scene, euclideanDistance)).setDepth(Depth.NETWORK).setOrigin(0, 0.5).setRotation(angle);
-      this.state.graph.createEdge(entity.id, cell.ref.id, euclideanDistance, sprite);
+      const isRelayOrRoot1 = entity.props.unitName === 'Relay' || entity.props.unitName === 'City';
+      const isRelayOrRoot2 = cell.ref.props.unitName === 'Relay' || cell.ref.props.unitName === 'City';
+      if (isRelayOrRoot1 && isRelayOrRoot2) sprite.setTint(0x0000ff); // make blue to indicate connection between relays
+      this.state.graph.createEdge(entity.id, cell.ref.id, euclideanDistance * entity.props.distanceFactor, sprite); // TODO verify this works as expected with distanceFactor
       this.state.remoteGraph.createEdge(entity.id, cell.ref.id, euclideanDistance, 'sprite placeholder');
     }
   }
@@ -200,7 +203,7 @@ export class Simulation {
 
     // Add or Remove fluid for whatever other reason (weapons, single emits etc)
     for (const {xCoord, yCoord, amount} of this.state.fluidChangeRequests) {
-      const index = yCoord * (level.sizeX + 1) + xCoord;
+      const index = cellIndexAt(xCoord, yCoord);
       fluidData[index] = Math.min(Math.max(fluidData[index] + amount, 0), elevationMax + overflow);
     }
     this.state.fluidChangeRequests.length = 0;
@@ -214,7 +217,7 @@ export class Simulation {
 
     for (let y = 0; y <= level.sizeY; y++) {
       for (let x = 0; x <= level.sizeX; x++) {
-        const indexCenter = y * (level.sizeX + 1) + x;
+        const indexCenter = cellIndexAt(x, y);
         const fluidCenter = prevFluidData[indexCenter];
         const elevationCenter = fluidCenter + this.state.terrainData[indexCenter];
 
@@ -234,7 +237,7 @@ export class Simulation {
             continue;
           }
 
-          const indexNeighbour = newY * (level.sizeX + 1) + newX;
+          const indexNeighbour = cellIndexAt(newX, newY);
           const elevationNeighbour = prevFluidData[indexNeighbour] + this.state.terrainData[indexNeighbour];
 
           const elevationDiff = elevationCenter - elevationNeighbour;
@@ -276,7 +279,7 @@ export class Simulation {
       const entity = this.state.entities.get(entityId);
       if (!entity) throw new Error('Collector not found. State corrupted');
       const {xCoord, yCoord, props: {collectionRadius}} = entity;
-      const collectorElevation = this.state.terrainData[yCoord * (level.sizeX + 1) + xCoord];
+      const collectorElevation = this.state.terrainData[cellIndexAt(xCoord, yCoord)];
 
       for (let yOffset = -collectionRadius; yOffset <= collectionRadius; yOffset++) {
         for (let xOffset = -collectionRadius; xOffset <= collectionRadius; xOffset++) {
@@ -289,7 +292,7 @@ export class Simulation {
             const posX = x + cellX;
             const posY = y + cellY;
             if (!(posX >= 0 && posX <= level.sizeX && posY >= 0 && posY <= level.sizeY)) continue;
-            const index = posY * (level.sizeX + 1) + posX;
+            const index = cellIndexAt(posX, posY);
             if (this.state.collectionData[index] === 1) continue;
 
             const terrainElevation = this.state.terrainData[index];
@@ -310,9 +313,9 @@ export class Simulation {
   private generateWorldCells() {
     for (let yCoord = 0; yCoord <= level.sizeY; yCoord++) {
       for (let xCoord = 0; xCoord <= level.sizeX; xCoord++) {
-        const cellIndex = yCoord * (level.sizeX + 1) + xCoord;
+        const cellIndex = cellIndexAt(xCoord, yCoord);
 
-        const edgeIndexTL = yCoord * (level.sizeX + 1) + xCoord;
+        const edgeIndexTL = cellIndexAt(xCoord, yCoord);
         const edgeIndexBL = edgeIndexTL + level.sizeX + 1;
         const edgeIndexTR = edgeIndexTL + 1;
         const edgeIndexBR = edgeIndexBL + 1;
@@ -366,7 +369,7 @@ export class Simulation {
         if (n < THRESHOLD * 2.5) n = 0;
         n = Math.floor(n / (THRESHOLD * 3)) * (THRESHOLD * 3);
 
-        const index = y * (level.sizeX + 1) + x;
+        const index = cellIndexAt(x, y);
 
         if (n % (THRESHOLD * 3) !== 0) throw new Error('Terrain elevation must be divisible by 3');
         this.state.terrainData[index] = n;
@@ -376,7 +379,7 @@ export class Simulation {
     for (const rect of level.rects) {
       for (let y = rect.yCoord; y < rect.yCoord + rect.h; y++) {
         for (let x = rect.xCoord; x < rect.xCoord + rect.w; x++) {
-          const index = y * (level.sizeX + 1) + x;
+          const index = cellIndexAt(x, y);
           this.state.terrainData[index] = rect.elevation;
         }
       }

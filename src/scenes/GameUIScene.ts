@@ -41,13 +41,15 @@ export default class GameUIScene extends Scene {
     const unitTemplate: HTMLTemplateElement | null = document.getElementById('unit-template') as HTMLTemplateElement;
     Object.values(SELECTABLE_UNITS).forEach((unit, i) => {
       const clone = unitTemplate.content.cloneNode(true) as HTMLElement;
-      (clone.querySelector('.unit-img') as HTMLImageElement).src = this.textures.getBase64(unit.unitName) || this.textures.getBase64(UNIT_CONFIG['Collector'].unitName);
+      const textureBase64 = this.textures.getBase64(unit.uiTextureKey);
+      if (!textureBase64) throw new Error('Texture not found');
+      clone.querySelector<HTMLImageElement>('.unit-img')!.src = textureBase64;
       clone.querySelector('.unit')!.id = unit.unitName;
       clone.querySelector('.unit-name')!.innerHTML = unit.unitName;
       clone.querySelector('.unit-cost')!.innerHTML = String(unit.buildCost);
       clone.querySelector('.unit-hotkey')!.innerHTML = String(i + 1);
       unitList.appendChild(clone);
-      (unitList.querySelector('#' + unit.unitName) as HTMLElement).onclick =  () => this.observer.emit(EVENT_UNIT_SELECTION_CHANGE, i);
+      unitList.querySelector<HTMLElement>('#' + unit.unitName)!.onclick =  () => this.observer.emit(EVENT_UNIT_SELECTION_CHANGE, i);
     });
     // UPDATE SELECTED UNIT
     const units = unitList.querySelectorAll('.unit');

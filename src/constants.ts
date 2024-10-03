@@ -35,7 +35,8 @@ export const enum SceneKeys {
 
 export enum Depth {
   TERRAIN = 1,
-  Collection,
+  COLLECTION,
+  COLLECTION_PREVIEW,
   NETWORK,
   AMMO_CIRCLE,
   UNIT,
@@ -127,9 +128,11 @@ export interface EntityProps {
   healthMax: number;
   healthRegenPerSecond: number;
   spriteKeys: string[];
+  uiTextureKey: string;
   size: '3x3' | '9x9';
   buildCost: number;
   isRelay: boolean; // whether this unit can relay energy to other units in connectionRange
+  distanceFactor: number; // e.g. if 0.5 it means that the distance in the graph is reduced by 50% and therefore 2x as fast
   movable: boolean;
   connectionRadius: number; // can only connect to other units within this distance
 
@@ -159,6 +162,7 @@ export const UNIT_CONFIG: Record<string, EntityProps> = {
     unitName: 'City',
     size: '9x9',
     spriteKeys: ['City'],
+    uiTextureKey: 'City',
     buildCost: 0,
     connectionRadius: 19,
     collectionRadius: 7,
@@ -169,6 +173,7 @@ export const UNIT_CONFIG: Record<string, EntityProps> = {
     speedIncrease: 0,
     movable: false,
     isRelay: true,
+    distanceFactor: 1,
     isEnergyRoot: true,
     // weapon specific
     ammoCost: 0,
@@ -186,6 +191,7 @@ export const UNIT_CONFIG: Record<string, EntityProps> = {
     unitName: 'Collector',
     size: '3x3',
     spriteKeys: ['Collector'],
+    uiTextureKey: 'Collector',
     buildCost: 5,
     connectionRadius: 9,
     collectionRadius: 5,
@@ -196,6 +202,7 @@ export const UNIT_CONFIG: Record<string, EntityProps> = {
     speedIncrease: 0,
     movable: false,
     isRelay: true,
+    distanceFactor: 1,
     isEnergyRoot: false,
     // weapon specific
     ammoCost: 0,
@@ -213,6 +220,7 @@ export const UNIT_CONFIG: Record<string, EntityProps> = {
     unitName: 'Relay',
     size: '3x3',
     spriteKeys: ['Relay'],
+    uiTextureKey: 'Relay',
     buildCost: 20,
     connectionRadius: 19,
     collectionRadius: 0,
@@ -223,6 +231,7 @@ export const UNIT_CONFIG: Record<string, EntityProps> = {
     speedIncrease: 0,
     movable: false,
     isRelay: true,
+    distanceFactor: 0.5, // TODO make energy travel faster
     isEnergyRoot: false,
     // weapon specific
     ammoCost: 0,
@@ -240,6 +249,7 @@ export const UNIT_CONFIG: Record<string, EntityProps> = {
     unitName: 'Blaster',
     size: '3x3',
     spriteKeys: ['Blaster', 'Blaster_top'],
+    uiTextureKey: 'Blaster_ui',
     buildCost: 25,
     connectionRadius: 9,
     collectionRadius: 0,
@@ -250,6 +260,7 @@ export const UNIT_CONFIG: Record<string, EntityProps> = {
     speedIncrease: 0,
     movable: true,
     isRelay: false,
+    distanceFactor: 1,
     isEnergyRoot: false,
     // weapon specific
     ammoCost: 0.2,
@@ -267,6 +278,7 @@ export const UNIT_CONFIG: Record<string, EntityProps> = {
     unitName: 'Mortar',
     size: '3x3',
     spriteKeys: ['Mortar', 'Mortar_shell'],
+    uiTextureKey: 'Mortar',
     buildCost: 50,
     connectionRadius: 9,
     collectionRadius: 0,
@@ -277,6 +289,7 @@ export const UNIT_CONFIG: Record<string, EntityProps> = {
     speedIncrease: 0,
     movable: true,
     isRelay: false,
+    distanceFactor: 1,
     isEnergyRoot: false,
     // weapon specific
     ammoCost: 10 / 3 - 0.01,
@@ -294,6 +307,7 @@ export const UNIT_CONFIG: Record<string, EntityProps> = {
     unitName: 'Storage',
     size: '3x3',
     spriteKeys: ['Storage'],
+    uiTextureKey: 'Storage',
     buildCost: 20,
     connectionRadius: 9,
     collectionRadius: 0,
@@ -304,6 +318,7 @@ export const UNIT_CONFIG: Record<string, EntityProps> = {
     speedIncrease: 0,
     movable: false,
     isRelay: false,
+    distanceFactor: 1,
     isEnergyRoot: false,
     // weapon specific
     ammoCost: 0,
@@ -321,6 +336,7 @@ export const UNIT_CONFIG: Record<string, EntityProps> = {
     unitName: 'Speed',
     size: '3x3',
     spriteKeys: ['Speed'],
+    uiTextureKey: 'Speed',
     buildCost: 35,
     connectionRadius: 9,
     collectionRadius: 0,
@@ -331,6 +347,7 @@ export const UNIT_CONFIG: Record<string, EntityProps> = {
     speedIncrease: GRID * 0.5,
     movable: false,
     isRelay: false,
+    distanceFactor: 1,
     isEnergyRoot: false,
     // weapon specific
     ammoCost: 0,
@@ -348,6 +365,7 @@ export const UNIT_CONFIG: Record<string, EntityProps> = {
     unitName: 'Reactor',
     size: '3x3',
     spriteKeys: ['Reactor'],
+    uiTextureKey: 'Reactor',
     buildCost: 40,
     connectionRadius: 9,
     collectionRadius: 0,
@@ -358,6 +376,7 @@ export const UNIT_CONFIG: Record<string, EntityProps> = {
     speedIncrease: 0,
     movable: false,
     isRelay: false,
+    distanceFactor: 1,
     isEnergyRoot: false,
     // weapon specific
     ammoCost: 0,
@@ -375,6 +394,7 @@ export const UNIT_CONFIG: Record<string, EntityProps> = {
     unitName: 'Emitter',
     size: '3x3',
     spriteKeys: ['Emitter'],
+    uiTextureKey: 'Emitter',
     buildCost: 0,
     connectionRadius: 0,
     collectionRadius: 0,
@@ -385,6 +405,7 @@ export const UNIT_CONFIG: Record<string, EntityProps> = {
     speedIncrease: 0,
     movable: false,
     isRelay: false,
+    distanceFactor: 1,
     isEnergyRoot: false,
     // weapon specific
     ammoCost: 0,
@@ -394,7 +415,7 @@ export const UNIT_CONFIG: Record<string, EntityProps> = {
     damage: 0,
     damagePattern: [],
     // emitter specific
-    fluidPerSecond: MAX_UINT16 * 2,
+    fluidPerSecond: MAX_UINT16 * 2.5,
     fluidEmitEveryNthFrame: 1,
     fluidDelay: 0,
   },
@@ -402,6 +423,7 @@ export const UNIT_CONFIG: Record<string, EntityProps> = {
     unitName: 'Emitter',
     size: '3x3',
     spriteKeys: ['Emitter'],
+    uiTextureKey: 'Emitter',
     buildCost: 0,
     connectionRadius: 0,
     collectionRadius: 0,
@@ -412,6 +434,7 @@ export const UNIT_CONFIG: Record<string, EntityProps> = {
     speedIncrease: 0,
     movable: false,
     isRelay: false,
+    distanceFactor: 1,
     isEnergyRoot: false,
     // weapon specific
     ammoCost: 0,
@@ -471,7 +494,7 @@ export const level001: Level = {
     {id: 'city', xCoord: 50, yCoord: 26, active: true, props: UNIT_CONFIG['City']},
     {id: 'emitter1', xCoord: 19, yCoord: 36, active: true, props: UNIT_CONFIG['EmitterWeak']},
     {id: 'emitter2', xCoord: 10, yCoord: 75, active: true, props: UNIT_CONFIG['EmitterWeak']},
-    {id: 'emitter3', xCoord: 78, yCoord: 54, active: true, props: UNIT_CONFIG['EmitterWeak']},
+    {id: 'emitter3', xCoord: 85, yCoord: 68, active: true, props: UNIT_CONFIG['EmitterWeak']},
     {id: 'collector1', xCoord: 42, yCoord: 30, active: true, props: UNIT_CONFIG['Collector']},
     {id: 'collector2', xCoord: 44, yCoord: 20, active: true, props: UNIT_CONFIG['Collector']},
     {id: 'collector3', xCoord: 50, yCoord: 15, active: true, props: UNIT_CONFIG['Collector']},

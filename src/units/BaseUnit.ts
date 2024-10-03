@@ -1,7 +1,7 @@
 import { Depth, GRID, HALF_GRID, level, SerializableEntityData, EntityProps as EntityProps, THRESHOLD, config, TICK_DELTA } from '../constants';
 import { Cell, EnergyRequest } from '../terrain/TerrainSimulation';
 import { PathfinderResult } from '../Graph';
-import { computeTerrainElevation, computeClosestCellIndicesInRange, generateId, computeFluidElevation } from '../util';
+import { computeTerrainElevation, computeClosestCellIndicesInRange, generateId, computeFluidElevation, cellIndexAt } from '../util';
 import { Simulation } from '../terrain/TerrainSimulation';
 
 export class Unit implements SerializableEntityData {
@@ -50,7 +50,7 @@ export class Unit implements SerializableEntityData {
     this.active = data.active;
     this.props = data.props;
 
-    this.cellIndex = data.yCoord * (level.sizeX + 1) + data.xCoord;
+    this.cellIndex = cellIndexAt(this.xCoord, this.yCoord);
 
     const elevation = computeTerrainElevation(this.cellIndex, simulation.state);
     if (elevation % (THRESHOLD * 3) !== 0) throw new Error('Structure must be placed on a cell where all 4 edges are on the same elevation layer');
@@ -262,7 +262,7 @@ export class Unit implements SerializableEntityData {
   }
 
   move(coordX: number, coordY: number) {
-    const newCellIndex = coordY * (level.sizeX + 1) + coordX;
+    const newCellIndex = cellIndexAt(coordX, coordY);
     if (this.simulation.state.cells[newCellIndex].ref === this) return;
     if (!this.props.movable || this.destroyed) throw new Error('This structure is not movable or already destroyed');
     this.xCoord = coordX;

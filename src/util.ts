@@ -61,7 +61,6 @@ export function computeClosestCellIndicesInRange(state: SimulationState, xCoord:
   return cells.map(cell => cell[0].cellIndex);
 }
 
-// TODO deduplicate with above
 export function getCellsInRange(state: SimulationState, xCoord: number, yCoord: number, radius: number, occupiedOnly = true): [Cell, number][] {
   const startY = Math.max(yCoord - radius, 0);
   const startX = Math.max(xCoord - radius, 0);
@@ -71,8 +70,7 @@ export function getCellsInRange(state: SimulationState, xCoord: number, yCoord: 
   const cells: [Cell, number][] = [];
   for (let y = startY; y <= endY; y++) {
     for (let x = startX; x <= endX; x++) {
-      const index = y * (level.sizeX + 1) + x;
-      const cell = state.cells[index];
+      const cell = state.cells[cellIndexAt(x, y)];
 
       if (occupiedOnly && !cell.ref) continue; // skip unoccupied cells only when desired
       const distance = Math.sqrt((xCoord - x) ** 2 + (yCoord - y) ** 2);
@@ -106,7 +104,7 @@ export function computeFluidElevation(cellIndex: number, state: SimulationState)
 
 export function canPlaceEntityAt(coordX: number, coordY: number, state: SimulationState): boolean {
   // Assumes the entity is 3x3 (all are except City atm)
-  const cellIndex = coordY * (level.sizeX + 1) + coordX;
+  const cellIndex = cellIndexAt(coordX, coordY);
 
   if (coordX < 0 || coordY < 0 || coordX >= level.sizeX || coordY >= level.sizeY) return false; // skip out of bounds
 
@@ -128,6 +126,10 @@ export function canPlaceEntityAt(coordX: number, coordY: number, state: Simulati
   if (centerCell.cellIndexBottomLeft !== null && state.cells[centerCell.cellIndexBottomLeft].ref) return false;
   if (centerCell.cellIndexBottomRight !== null && state.cells[centerCell.cellIndexBottomRight].ref) return false;
   return true;
+}
+
+export function cellIndexAt(xCoord: number, yCoord: number): number {
+  return yCoord * (level.sizeX + 1) + xCoord;
 }
 
 const textureKeysEdge = new Set<string>();

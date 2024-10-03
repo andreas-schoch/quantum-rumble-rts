@@ -17,7 +17,7 @@ export class Renderer implements RenderingAdapter {
     const width = level.sizeX * GRID;
     const height = level.sizeY * GRID;
     this.rtTerrain = this.scene.make.renderTexture({x: 0, y: 0, width, height}, true).setDepth(Depth.TERRAIN).setOrigin(0, 0);
-    this.rtCollection = this.scene.make.renderTexture({x: 0, y: 0, width, height}, true).setDepth(Depth.Collection).setOrigin(0, 0);
+    this.rtCollection = this.scene.make.renderTexture({x: 0, y: 0, width, height}, true).setDepth(Depth.COLLECTION).setOrigin(0, 0);
     this.rtFluid = this.scene.make.renderTexture({x: 0, y: 0, width, height}, true).setDepth(Depth.FLUID).setOrigin(0, 0);
     this.marchingSquares = new MarchingSquares();
 

@@ -12,14 +12,15 @@ export default class PreloadScene extends Phaser.Scene {
     this.load.audio('attack_turret', ['assets/audio/sfx/attack_turret/footstep_concrete_001.ogg',]);
     this.load.audio('theme', ['assets/audio/music/Kevin MacLeod/Shadowlands 4 - Breath.mp3',]);
     this.load.html('dom_game_ui', 'assets/html/game_ui.html');
+    this.generateTextures(); // needs to be in preload for the UI textures to be created in time
   }
 
   create() {
-    this.generateTextures();
     this.scene.start(SceneKeys.GAME_SCENE);
   }
 
   private generateTextures() {
+    // Textures are kept minimal and generated dynamically because I have no art skills to make proper ones myself
     const graphics = this.add.graphics();
 
     // EMITTER TEXTURE
@@ -78,6 +79,14 @@ export default class PreloadScene extends Phaser.Scene {
     graphics.fillStyle(0xffffff, 1);
     graphics.generateTexture('Blaster_top', GRID * 3, GRID * 3);
     graphics.clear();
+    // BLASTER UI TEXTURE
+    const blasterUI = this.add.renderTexture(0, 0, GRID * 3, GRID * 3);
+    blasterUI.draw('Blaster', 0, 0);
+    blasterUI.draw('Blaster_top', 0, 0);
+    blasterUI.snapshot(image => {
+      this.textures.addBase64('Blaster_ui', (image as HTMLImageElement).src);
+      blasterUI.destroy();
+    });
 
     // MORTAR TEXTURE
     const offsetXY = HALF_GRID * 3;
@@ -133,7 +142,7 @@ export default class PreloadScene extends Phaser.Scene {
     graphics.clear();
 
     // background cell white
-    graphics.fillStyle(0xffffff, 1);
+    graphics.fillStyle(0xffffff, 0.4);
     graphics.lineStyle(1, 0xcccccc, 1);
     graphics.fillRect(0, 0, GRID, GRID);
     graphics.strokeRect(0, 0, GRID, GRID);
@@ -141,11 +150,11 @@ export default class PreloadScene extends Phaser.Scene {
     graphics.clear();
 
     // Background cell green
-    graphics.fillStyle(0xe2ffe9, 1);
+    graphics.fillStyle(0xff0000, 0.4);
     graphics.lineStyle(1, 0xcccccc, 1);
     graphics.fillRect(0, 0, GRID, GRID);
     graphics.strokeRect(0, 0, GRID, GRID);
-    graphics.generateTexture('cell_green', GRID, GRID);
+    graphics.generateTexture('cell_red', GRID, GRID);
     graphics.clear();
 
     // Energy Ball gray
@@ -170,3 +179,17 @@ export default class PreloadScene extends Phaser.Scene {
     graphics.destroy();
   }
 }
+
+// TODOS
+// - Add sfx back again
+// - Re-run pathfinding every once in a while
+// - Refactor to not rely on phaser followers for energy balls
+// - Disconnect entities from the network when part of their path gets destroyed. Ideally keep a set of node ids for each entity and iterate over all entities to check if they were affected by a path destruction.
+//   If yes, try to find a new path for them. If no path is found, disconnect them from the network.
+// - Ability to move weapons
+// - Display health bar while building and when damaged until health is full again.
+// - Add a win condition. I guess the original 3 totems the city has to connect to is fine
+// - Refactor UI to use solidJS
+// - Add multiple levels that can be selected from a menu
+// - Remove connections when node gets destroyed or deleted
+// - Show UI when selecting a unit with buttons to deactivate and destroy unit
