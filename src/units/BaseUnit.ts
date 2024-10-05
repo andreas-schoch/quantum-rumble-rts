@@ -1,4 +1,4 @@
-import { Depth, GRID, HALF_GRID, level, SerializableEntityData, EntityProps as EntityProps, THRESHOLD, config, TICK_DELTA } from '../constants';
+import { Depth, GRID, HALF_GRID, SerializableEntityData, EntityProps as EntityProps, THRESHOLD, config, TICK_DELTA } from '../constants';
 import { Cell, EnergyRequest } from '../terrain/TerrainSimulation';
 import { PathfinderResult } from '../Graph';
 import { computeTerrainElevation, computeClosestCellIndicesInRange, generateId, computeFluidElevation, cellIndexAt } from '../util';
@@ -19,8 +19,9 @@ export class Unit implements SerializableEntityData {
   findPathAsyncInProgress = false;
 
   sprites: Phaser.GameObjects.Sprite[] = [];
-  ammoCircle: Phaser.GameObjects.Graphics;
   mortarShells: Phaser.GameObjects.Sprite[] = [];
+  ammoCircle: Phaser.GameObjects.Graphics;
+  healthBar: Phaser.GameObjects.Graphics;
   blast: Phaser.GameObjects.Graphics;
 
   destroyed = false;
@@ -36,10 +37,15 @@ export class Unit implements SerializableEntityData {
   pendingBuild: EnergyRequest[] = [];
   pendingHealth: EnergyRequest[] = [];
   pendingAmmo: EnergyRequest[] = [];
-  particleImpact: Phaser.GameObjects.Particles.ParticleEmitter;
   blastSprite: Phaser.GameObjects.Sprite;
   textureKeysBlast: Set<string> = new Set();
   energyRequestCooldown = 10; // every 10 ticks (500ms)
+
+  static particleImpact: Phaser.GameObjects.Particles.ParticleEmitter;
+  static sfx_startCollect: Phaser.Sound.BaseSound;
+  static sfx_blasterHit: Phaser.Sound.BaseSound;
+  static sfx_mortarShellHit: Phaser.Sound.BaseSound;
+  static sfx_mortarShellStart: Phaser.Sound.BaseSound;
 
   constructor(private simulation: Simulation, data: SerializableEntityData) {
     this.id = data.id || generateId();
@@ -49,24 +55,18 @@ export class Unit implements SerializableEntityData {
     this.y = data.yCoord * GRID + HALF_GRID;
     this.active = data.active;
     this.props = data.props;
-
     this.cellIndex = cellIndexAt(this.xCoord, this.yCoord);
 
     const elevation = computeTerrainElevation(this.cellIndex, simulation.state);
     if (elevation % (THRESHOLD * 3) !== 0) throw new Error('Structure must be placed on a cell where all 4 edges are on the same elevation layer');
 
+    this.initStatic();
+
     this.remainingBuildCost = this.props.buildCost || 0;
 
-    this.particleImpact = this.simulation.scene.add.particles(0, 0, 'energy_red', {
-      frequency: -1,
-      lifespan: 200,
-      speed: {min: 200, max: 300},
-      scale: {start: 0.4, end: 0.2},
-      quantity: 1,
-      blendMode: 'ADD',
-    }).setDepth(Depth.PARTICLE_IMPACT);
-
     this.sprites = data.props.spriteKeys?.map(key => simulation.scene.add.sprite(this.x, this.y, key).setDepth(Depth.UNIT).setAlpha(0.3));
+
+    if (this.props.healthMax >= 1) this.healthBar = simulation.scene.add.graphics().setDepth(Depth.AMMO_CIRCLE);
 
     if (data.props.unitName === 'Blaster') {
       const indices = computeClosestCellIndicesInRange(this.simulation.state, this.xCoord, this.yCoord, this.props.attackRadius);
@@ -75,8 +75,7 @@ export class Unit implements SerializableEntityData {
       this.blastSprite = simulation.scene.add.sprite(this.x, this.y, this.getBlastSpriteTexture(this.props.attackRadius * GRID)).setDepth(Depth.MORTAR_SHELL).setVisible(false).setOrigin(0, 0.25);
       this.renderAmmo();
     } else if (data.props.unitName === 'Mortar') {
-      const indices = computeClosestCellIndicesInRange(this.simulation.state, this.xCoord, this.yCoord, this.props.attackRadius);
-      this.cellIndicesInAttackRange = indices.filter(i => simulation.state.terrainData[i] <= elevation);
+      this.cellIndicesInAttackRange = computeClosestCellIndicesInRange(this.simulation.state, this.xCoord, this.yCoord, this.props.attackRadius);
       this.ammoCircle = simulation.scene.add.graphics().setDepth(Depth.AMMO_CIRCLE);
       this.mortarShells.push(simulation.scene.add.sprite(this.x, this.y, 'Mortar_shell').setDepth(Depth.MORTAR_SHELL).setScale(1).setVisible(false));
       this.mortarShells.push(simulation.scene.add.sprite(this.x, this.y, 'Mortar_shell').setDepth(Depth.MORTAR_SHELL).setScale(1).setVisible(false));
@@ -84,50 +83,51 @@ export class Unit implements SerializableEntityData {
       this.sprites[1].setVisible(false);
     }
 
-    if (data.props.buildCost === 0) this.build(1);
+    if (data.props.buildCost === 0 || data.built) this.build(data.props.buildCost + 1);
   }
 
-  step(tickCounter: number) {
+  step() {
     if (this.props.unitName === 'City') {
       // TODO
     } else if (this.props.unitName === 'Collector') {
       this.checkSelfDamage();
-      this.checkEnergyNeeds(tickCounter);
+      this.checkEnergyNeeds();
     } else if (this.props.unitName === 'Relay') {
       this.checkSelfDamage();
-      this.checkEnergyNeeds(tickCounter);
+      this.checkEnergyNeeds();
     } else if (this.props.unitName === 'Blaster') {
       this.checkSelfDamage();
-      this.checkEnergyNeeds(tickCounter);
+      this.checkEnergyNeeds();
       this.selfHeal();
-      this.blasterAttack(tickCounter);
+      this.blasterAttack();
     } else if (this.props.unitName === 'Mortar') {
       this.checkSelfDamage();
-      this.checkEnergyNeeds(tickCounter);
+      this.checkEnergyNeeds();
       this.selfHeal();
-      this.mortarAttack(tickCounter);
+      this.mortarAttack();
     } else if (this.props.unitName === 'Storage') {
       this.checkSelfDamage();
-      this.checkEnergyNeeds(tickCounter);
+      this.checkEnergyNeeds();
     } else if (this.props.unitName === 'Speed') {
       this.checkSelfDamage();
-      this.checkEnergyNeeds(tickCounter);
+      this.checkEnergyNeeds();
     } else if (this.props.unitName === 'Reactor') {
       this.checkSelfDamage();
-      this.checkEnergyNeeds(tickCounter);
+      this.checkEnergyNeeds();
     } else if (this.props.unitName === 'Emitter') {
-      this.emit(tickCounter);
+      this.emit();
     }
   }
 
-  private checkEnergyNeeds(tickCounter: number) {
+  private checkEnergyNeeds() {
     if (this.destroyed || !this.active) return;
 
-    if (!this.energyPath.found && !this.findPathAsyncInProgress) {
-      this.findPathAsync(tickCounter);
+    if (!this.energyPath.found) {
+      if (!this.findPathAsyncInProgress) this.findPathAsync();
       return;
     }
 
+    const tickCounter = this.simulation.state.tickCounter;
     if (tickCounter - this.lastEnergyRequest <= this.energyRequestCooldown) return;
 
     if (this.built) {
@@ -150,8 +150,9 @@ export class Unit implements SerializableEntityData {
       this.healthCurrent = Math.min(this.healthCurrent + this.props.healthRegenPerSecond, this.props.healthMax);
   }
 
-  private emit(tickCounter: number) {
+  private emit() {
     if (!this.active) return;
+    const tickCounter = this.simulation.state.tickCounter;
     if (this.props.fluidDelay > tickCounter) return;
     if (this.props.fluidEmitEveryNthFrame > 1  && tickCounter % this.props.fluidEmitEveryNthFrame !== 1) return;
     const max = config.terrain.elevationMax + config.fluid.overflow;
@@ -184,7 +185,8 @@ export class Unit implements SerializableEntityData {
     }
   }
 
-  private findPathAsync(tickCounter: number) {
+  private findPathAsync() {
+    const tickCounter = this.simulation.state.tickCounter;
     if (tickCounter - this.lastPathFindAttempt < 20) return;
     this.findPathAsyncInProgress = true;
     this.lastPathFindAttempt = tickCounter;
@@ -210,12 +212,16 @@ export class Unit implements SerializableEntityData {
     if (this.props.energyStorageCapacity) this.simulation.state.energyStorageMax += this.props.energyStorageCapacity;
     if (this.props.speedIncrease) this.simulation.state.energyTravelSpeed += this.props.speedIncrease;
     if (this.props.fluidPerSecond) this.simulation.state.emitterIds.add(this.id);
+    if (this.props.collectionRadius) Unit.sfx_startCollect.play();
   }
 
   destroy() {
     if (this.destroyed) return;
     this.sprites.forEach(sprite => sprite.destroy());
     if (this.ammoCircle) this.ammoCircle.destroy();
+    if (this.healthBar) this.healthBar.destroy();
+    if (this.blastSprite) this.blastSprite.destroy();
+    this.mortarShells.forEach(shell => shell.destroy());
     this.destroyed = true;
     this.healthCurrent = 0;
     this.simulation.removeEntity(this.id);
@@ -245,6 +251,26 @@ export class Unit implements SerializableEntityData {
       const shellVisible = this.ammoCurrent >= this.props.ammoCost;
       this.sprites[1].setVisible(shellVisible);
     }
+  }
+
+  private renderHealth() {
+    const length = this.props.size === '3x3' ? HALF_GRID * 3 : HALF_GRID * 9;
+    let factor = 0;
+    this.healthBar.clear();
+    this.healthBar.displayOriginY = 0.5;
+
+    if (this.built) {
+      if (this.props.healthMax === 0 || this.healthCurrent === this.props.healthMax) return;
+      factor = this.healthCurrent / this.props.healthMax;
+      this.healthBar.fillRect(this.x - HALF_GRID, this.y + GRID, length * factor, 2);
+    } else {
+      if (this.remainingBuildCost === 0) return;
+      factor = 1 - (this.remainingBuildCost / this.props.buildCost);
+    }
+    this.healthBar.fillStyle(0xaaaaaa, 1);
+    this.healthBar.fillRect(this.x - (length/2), this.y + GRID, length, 3);
+    this.healthBar.fillStyle(0x00ff00, 1);
+    this.healthBar.fillRect(this.x - (length/2), this.y + GRID, length * factor, 3);
   }
 
   private getBlastSpriteTexture(euclideanDistance: number): string {
@@ -279,16 +305,16 @@ export class Unit implements SerializableEntityData {
     cellAfter.ref = this;
   }
 
-  blasterAttack(tickCounter: number) {
+  blasterAttack() {
     if (this.ammoCurrent < this.props.ammoCost) return;
-    if (tickCounter - this.lastAttack <= this.props.attackCooldown) return;
+    if (this.simulation.state.tickCounter - this.lastAttack <= this.props.attackCooldown) return;
 
     for (const index of this.cellIndicesInAttackRange) {
       const cell = this.simulation.state.cells[index];
       const fluidElevation = computeFluidElevation(index, this.simulation.state);
       if (fluidElevation >= THRESHOLD) {
         this.ammoCurrent -= this.props.ammoCost;
-        this.lastAttack = tickCounter;
+        this.lastAttack = this.simulation.state.tickCounter;
         this.renderAmmo();
 
         // Rotate the Blaster_top sprite towards the target
@@ -303,15 +329,16 @@ export class Unit implements SerializableEntityData {
         setTimeout(() => this.blastSprite.setVisible(false).setActive(false), 75);
         this.blastSprite.setAngle(degrees);
         this.blastSprite.setVisible(true).setActive(true);
-        this.particleImpact.explode(20, cell.x, cell.y);
+        Unit.particleImpact.explode(20, cell.x, cell.y);
+        Unit.sfx_blasterHit.play();
         break;
       }
     }
   }
 
-  mortarAttack(tickCounter: number) {
+  mortarAttack() {
     if (this.ammoCurrent < this.props.ammoCost) return;
-    if (tickCounter - this.lastAttack <= this.props.attackCooldown) return;
+    if (this.simulation.state.tickCounter - this.lastAttack <= this.props.attackCooldown) return;
 
     // Find cell with highest fluid elevation in attack range
     let highestFluidCell: Cell | null = null;
@@ -332,13 +359,14 @@ export class Unit implements SerializableEntityData {
     if (highestFluidCell === null) return;
 
     this.ammoCurrent -= this.props.ammoCost;
-    this.lastAttack = tickCounter;
+    this.lastAttack = this.simulation.state.tickCounter;
     this.renderAmmo();
 
     // duration adjusted by distance so it flies longer the further away the target is
     const distance = Math.sqrt((highestFluidCell.x - this.x) ** 2 + (highestFluidCell.y - this.y) ** 2);
     const maxDistance = this.props.attackRadius * GRID;
     const TOTAL_DURATION = 1500 * (distance / maxDistance);
+    Unit.sfx_mortarShellStart.play();
     const tween = this.simulation.scene.tweens.add({
       targets: this.mortarShells[0],
       x: { value: highestFluidCell.x, duration: TOTAL_DURATION, ease: 'Linear' },
@@ -357,7 +385,9 @@ export class Unit implements SerializableEntityData {
         (tween.targets[0] as Phaser.GameObjects.Sprite).setVisible(false);
         if (!highestFluidCell) throw new Error('cell is null');
         this.simulation.fluidChangeRequest(highestFluidCell.xCoord, highestFluidCell.yCoord, -this.props.damage, this.props.damagePattern);
-        this.particleImpact.explode(30, highestFluidCell.x, highestFluidCell.y);
+        Unit.particleImpact.explode(30, highestFluidCell.x, highestFluidCell.y);
+        Unit.sfx_mortarShellHit.play();
+        tween.destroy();
       },
     });
 
@@ -368,9 +398,27 @@ export class Unit implements SerializableEntityData {
     const fluidData = this.simulation.state.fluidData;
     const {edgeIndexTL, edgeIndexTR, edgeIndexBL, edgeIndexBR} = this.simulation.state.cells[this.cellIndex];
     const shouldTakeDamage = fluidData[edgeIndexTL] > THRESHOLD || fluidData[edgeIndexTR] > THRESHOLD || fluidData[edgeIndexBR] > THRESHOLD || fluidData[edgeIndexBL] > THRESHOLD;
-    if (shouldTakeDamage) this.hit(1);
+    if (shouldTakeDamage) this.hit(3);
+    this.renderHealth();
   }
 
+  private initStatic() {
+    if (!Unit.sfx_startCollect) Unit.sfx_startCollect = this.simulation.scene.sound.add('start_collect', {detune: 600, rate: 1.25, volume: 0.35 , loop: false});
+    if (!Unit.sfx_blasterHit) Unit.sfx_blasterHit = this.simulation.scene.sound.add('attack_turret', {detune: 0, rate: 1.25, volume: 0.35 , loop: false});
+    if (!Unit.sfx_mortarShellHit) Unit.sfx_mortarShellHit = this.simulation.scene.sound.add('attack_turret', {detune: -1000, rate: 0.5, volume: 1.5, loop: false});
+    if (!Unit.sfx_mortarShellStart) Unit.sfx_mortarShellStart = this.simulation.scene.sound.add('attack_turret', {detune: -600, rate: 1.75, volume: 0.7, loop: false});
+
+    if (!Unit.particleImpact) {
+      Unit.particleImpact = this.simulation.scene.add.particles(0, 0, 'energy_red', {
+        frequency: -1,
+        lifespan: 200,
+        speed: {min: 200, max: 300},
+        scale: {start: 0.4, end: 0.2},
+        quantity: 1,
+        blendMode: 'ADD',
+      }).setDepth(Depth.PARTICLE_IMPACT);
+    }
+  }
 }
 
 // EmitSystem

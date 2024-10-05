@@ -1,5 +1,5 @@
 import { GameObjects, Scene } from 'phaser';
-import { DEFAULT_WIDTH, EVENT_UNIT_SELECTION_CHANGE, SceneKeys, UNIT_CONFIG } from '../constants';
+import { DEFAULT_WIDTH, EVENT_UNIT_SELECTION_CHANGE, SceneKeys } from '../constants';
 import { EVENT_ENERGY_CONSUMPTION_CHANGE, EVENT_ENERGY_PRODUCTION_CHANGE, EVENT_ENERGY_STORAGE_CHANGE } from '../constants';
 import GameScene from './GameScene';
 import { SELECTABLE_UNITS } from '../index';
@@ -26,7 +26,7 @@ export default class GameUIScene extends Scene {
 
   create() {
     this.initDomUi();
-    this.music = this.sound.add('theme', {loop: true, volume: 0.4, rate: 1, delay: 0, detune: 400});
+    this.music = this.sound.add('theme', {loop: true, volume: 0.2, rate: 1, delay: 0, detune: 400});
     this.music.play();
   }
 

@@ -114,6 +114,7 @@ export interface SerializableEntityData {
   xCoord: number;
   yCoord: number;
   active: boolean;
+  built: boolean;
   // destroyed: boolean;
   // elevation: number;
   props: EntityProps;
@@ -166,7 +167,7 @@ export const UNIT_CONFIG: Record<string, EntityProps> = {
     buildCost: 0,
     connectionRadius: 19,
     collectionRadius: 7,
-    energyProduction: 0.8,
+    energyProduction: 0.8 * 50,
     energyStorageCapacity: 20,
     healthMax: 8000,
     healthRegenPerSecond: 1,
@@ -294,7 +295,7 @@ export const UNIT_CONFIG: Record<string, EntityProps> = {
     // weapon specific
     ammoCost: 10 / 3 - 0.01,
     ammoMax: 20,
-    attackCooldown: 40,
+    attackCooldown: 50,
     attackRadius: 9,
     damage: THRESHOLD * 256,
     damagePattern: [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, -1], [1, -1], [-1, 1], [-2, 0], [2, 0], [0, 2], [0, -2]],
@@ -459,6 +460,7 @@ export interface Level {
   entities: SerializableEntityData[];
 }
 
+// TODO create a few levels and start the game from a level selector menu
 export const level001: Level = {
   seed: 0.123,
   sizeX: 100,
@@ -487,18 +489,18 @@ export const level001: Level = {
 
     {xCoord: 42, yCoord: 24, w: 2, h: 3, elevation: THRESHOLD * 3},
     {xCoord: 40, yCoord: 26, w: 2, h: 3, elevation: THRESHOLD * 3},
-    // {xCoord: 36, yCoord: 28, w: 4, h: 3, elevation: THRESHOLD * 3},
-    // {xCoord: 41, yCoord: 21, w: 2, h: 3, elevation: THRESHOLD * 3},
+
+    {xCoord: 38, yCoord: 27, w: 9, h: 10, elevation: THRESHOLD * 3},
   ],
   entities: [
-    {id: 'city', xCoord: 50, yCoord: 26, active: true, props: UNIT_CONFIG['City']},
-    {id: 'emitter1', xCoord: 19, yCoord: 36, active: true, props: UNIT_CONFIG['EmitterWeak']},
-    {id: 'emitter2', xCoord: 10, yCoord: 75, active: true, props: UNIT_CONFIG['EmitterWeak']},
-    {id: 'emitter3', xCoord: 85, yCoord: 68, active: true, props: UNIT_CONFIG['EmitterWeak']},
-    {id: 'collector1', xCoord: 42, yCoord: 30, active: true, props: UNIT_CONFIG['Collector']},
-    {id: 'collector2', xCoord: 44, yCoord: 20, active: true, props: UNIT_CONFIG['Collector']},
-    {id: 'collector3', xCoord: 50, yCoord: 15, active: true, props: UNIT_CONFIG['Collector']},
-    // {id: 'Mortar1', xCoord: 38, yCoord: 32, active: true, props: UNIT_CONFIG['Mortar']},
+    {id: 'city', xCoord: 50, yCoord: 26, active: true, built: true, props: UNIT_CONFIG['City']},
+    {id: 'emitter1', xCoord: 19, yCoord: 36, active: true, built: false, props: UNIT_CONFIG['EmitterWeak']},
+    {id: 'emitter2', xCoord: 10, yCoord: 75, active: true, built: false, props: UNIT_CONFIG['EmitterWeak']},
+    {id: 'emitter3', xCoord: 85, yCoord: 68, active: true, built: false, props: UNIT_CONFIG['EmitterWeak']},
+    {id: 'emitter4', xCoord: 95, yCoord: 5, active: true, built: false, props: UNIT_CONFIG['EmitterWeak']},
+    {id: 'collector2', xCoord: 44, yCoord: 20, active: true, built: false, props: UNIT_CONFIG['Collector']},
+    {id: 'relay1', xCoord: 75, yCoord: 27, active: true, built: true, props: UNIT_CONFIG['Relay']},
+    {id: 'Mortar1', xCoord: 38, yCoord: 32, active: true, built: true, props: UNIT_CONFIG['Mortar']},
   ],
 };
 

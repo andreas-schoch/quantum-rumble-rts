@@ -11,6 +11,7 @@ export interface SimulationState {
   root: Unit | null;
   graph: Graph<Unit, Phaser.GameObjects.Sprite>;
   remoteGraph: Remote<Graph>; // Computed within worker
+  tickCounter: number;
 
   // the below data represents the "edges" of the cells indicating the fluid level, terrain elevation or collection area
   prevFluidData: Uint16Array;
@@ -34,6 +35,7 @@ export interface SimulationState {
   collectorIds: Set<string>;
 
   collectorDataNeedsRefresh: boolean;
+  isPaused: boolean;
 }
 
 const size = (level.sizeX + 1) * (level.sizeY + 1) * Uint16Array.BYTES_PER_ELEMENT;
@@ -61,6 +63,8 @@ export class Simulation {
     emitterIds: new Set(),
     collectorIds: new Set(),
     collectorDataNeedsRefresh: false,
+    isPaused: false,
+    tickCounter: 0,
   };
 
   particlePlaceEntity: Phaser.GameObjects.Particles.ParticleEmitter;
@@ -84,11 +88,13 @@ export class Simulation {
     for(const entityData of level.entities) this.addEntity(entityData);
   }
 
-  step(tickCounter: number) {
-    this.updateEnergy(tickCounter);
-    this.fluidFlow(tickCounter);
+  step() {
+    if (this.state.isPaused) return;
+    this.state.tickCounter++;
+    this.updateEnergy();
+    this.fluidFlow();
     this.updateCollectorData();
-    for(const entity of this.state.entities.values()) entity.step(tickCounter);
+    for(const entity of this.state.entities.values()) entity.step();
   }
 
   addEntity(data: SerializableEntityData) {
@@ -169,7 +175,7 @@ export class Simulation {
     }
   }
 
-  updateEnergy(tickCounter: number) {
+  updateEnergy() {
     const energyProducedPerSecond = this.state.energyProducing + this.state.energyCollecting;
     const energyStorage = Math.min(this.state.energyStorageCurrent + (energyProducedPerSecond * TICK_DELTA), this.state.energyStorageMax);
     const energyDeficit = this.state.energyRequests.reduce((acc, cur) => acc + cur.amount, 0);
@@ -188,7 +194,7 @@ export class Simulation {
     // TODO this doesn't need to be an event. The outside world can just read the value
     // this.onEnergyStorageChange(this.state.energyStorageCurrent, this.state.energyStorageMax);
     this.observer.emit(EVENT_ENERGY_STORAGE_CHANGE, this.state.energyStorageCurrent, this.state.energyStorageMax);
-    if (tickCounter % 20 === 0) {
+    if (this.state.tickCounter % 20 === 0) {
       // this.onEnergyProductionChange(this.state.energyProducedPerSecond);
       // this.onEnergyConsumptionChange(this.state.energyConsumedPerSecond);
       this.observer.emit(EVENT_ENERGY_PRODUCTION_CHANGE, this.state.energyProducedPerSecond);
@@ -196,7 +202,7 @@ export class Simulation {
       this.state.energyConsumedPerSecond = 0;
     }
   }
-  fluidFlow(tickCounter: number) {
+  fluidFlow() {
     const {flowRate, overflow} = config.fluid;
     const {elevationMax} = config.terrain;
     const {prevFluidData, fluidData} = this.state;
@@ -211,7 +217,7 @@ export class Simulation {
 
     const totalFluid = prevFluidData.reduce((acc, cur) => acc + cur, 0);
 
-    const neighbours = tickCounter % 2 === 0 ? this.flowNeighbours : this.flowNeighboursAlt;
+    const neighbours = this.state.tickCounter % 2 === 0 ? this.flowNeighbours : this.flowNeighboursAlt;
     const tmp: [number, number][] = Array.from({length: neighbours.length}, () => [0, 0]);
     let i = 0;
 

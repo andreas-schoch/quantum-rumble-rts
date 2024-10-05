@@ -14,14 +14,11 @@ export default class GameScene extends Phaser.Scene {
   pointerY: number | null = null;
   pointerCoordX: number | null = null;
   pointerCoordY: number;
-  sfx_start_collect: Phaser.Sound.BaseSound;
   sfx_place_structure: Phaser.Sound.BaseSound;
-  tickCounter: number;
   selectedUnit: EntityProps | null;
   simulation: Simulation;
   tilemap: Tilemaps.Tilemap;
   tileset: Tilemaps.Tileset | null;
-  isPaused = false;
   previewer: Previewer;
 
   constructor() {
@@ -29,7 +26,6 @@ export default class GameScene extends Phaser.Scene {
   }
 
   private create() {
-    this.sfx_start_collect = this.sound.add('start_collect', {detune: 600, rate: 1.25, volume: 0.5 , loop: false});
     this.sfx_place_structure = this.sound.add('place_structure', {detune: 200, rate: 1.25, volume: 1 , loop: false});
 
     this.scene.launch(SceneKeys.GAME_UI_SCENE, [this, () => {
@@ -41,19 +37,8 @@ export default class GameScene extends Phaser.Scene {
 
     this.simulation = new Simulation(this, this.observer, new Renderer(this));
     this.previewer = new Previewer(this, this.simulation.state);
-    this.tickCounter = 0;
-    // Only rendering related things should happen every frame. I potentially want to be able to simulate this game on a server, so it needs to be somewhat deterministic
-    this.time.addEvent({
-      delay: TICK_RATE,
-      timeScale: 1,
-      callback: () => {
-        if (this.isPaused) return;
-        this.tickCounter++;
-        this.simulation.step(this.tickCounter);
-      },
-      callbackScope: this,
-      loop: true
-    });
+
+    setInterval(() => this.simulation.step(), TICK_RATE);
 
     this.observer.on(EVENT_UNIT_SELECTION_CHANGE, (unitIndex: number) => this.selectUnit(unitIndex, false));
   }
@@ -84,8 +69,6 @@ export default class GameScene extends Phaser.Scene {
     const keyFIVE = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.FIVE);
     const keySIX = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SIX);
     const keySEVEN = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SEVEN);
-    const keyEIGHT = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.EIGHT);
-    const keyNINE = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.NINE);
     const keyESC = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ESC);
     const keyX = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.X);
     const keyP = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.P);
@@ -107,7 +90,6 @@ export default class GameScene extends Phaser.Scene {
       zoomSpeed: 0.05,
     });
 
-    // TODO deduplicate
     keyONE.onDown = () => this.selectUnit(0);
     keyTWO.onDown = () => this.selectUnit(1);
     keyTHREE.onDown = () => this.selectUnit(2);
@@ -115,12 +97,10 @@ export default class GameScene extends Phaser.Scene {
     keyFIVE.onDown = () => this.selectUnit(4);
     keySIX.onDown = () => this.selectUnit(5);
     keySEVEN.onDown = () => this.selectUnit(6);
-    keyEIGHT.onDown = () => this.selectUnit(7);
-    keyNINE.onDown = () => this.selectUnit(8);
     keyESC.onDown = () => this.selectUnit(-1);
     keyX.onDown = () => this.selectUnit(-1);
-    keyP.onDown = () => this.isPaused = !this.isPaused;
-    keySPACE.onDown = () => this.isPaused = !this.isPaused;
+    keyP.onDown = () => this.simulation.state.isPaused = !this.simulation.state.isPaused;
+    keySPACE.onDown = () => this.simulation.state.isPaused = !this.simulation.state.isPaused;
 
     // MOUSE AND POINTER STUFF
     const input = this.input;
@@ -149,9 +129,9 @@ export default class GameScene extends Phaser.Scene {
       if (pointerCoordX === null || pointerCoordY === null) return;
       if (pointerCoordX < 0 || pointerCoordY < 0 || pointerCoordX > level.sizeX || pointerCoordY > level.sizeY) return; // skip out of bounds
 
-      if (this.selectedUnit) {
-        if (!canPlaceEntityAt(pointerCoordX, pointerCoordY, this.simulation.state)) return;
-        this.simulation.addEntity({active: true, xCoord: pointerCoordX, yCoord: pointerCoordY, props: this.selectedUnit});
+      if (this.selectedUnit && canPlaceEntityAt(pointerCoordX, pointerCoordY, this.simulation.state)) {
+        this.sfx_place_structure.play();
+        this.simulation.addEntity({active: true, built: false, xCoord: pointerCoordX, yCoord: pointerCoordY, props: this.selectedUnit});
       }
       // else console.log('TODO implement select'); // TODO find structure under click and select it (show info about it in the UI)
     });
