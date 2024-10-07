@@ -2,8 +2,9 @@ import { MarchingSquares } from './MarchingSquares';
 
 import { config, Depth, GRID, level, SPACE_BETWEEN, THRESHOLD } from '../constants';
 import GameScene from '../scenes/GameScene';
-import { generateId, getVisibleBounds } from '../util';
+import { generateId, getEdgeSpriteTexture, getVisibleBounds } from '../util';
 import { Cell, Energy, EnergyRequest, RenderingAdapter, SimulationState } from './TerrainSimulation';
+import { Unit } from '../units/BaseUnit.js';
 
 export class Renderer implements RenderingAdapter {
   readonly marchingSquares: MarchingSquares;
@@ -12,6 +13,7 @@ export class Renderer implements RenderingAdapter {
   private rtTerrain: Phaser.GameObjects.RenderTexture;
   private rtFluid: Phaser.GameObjects.RenderTexture;
   private rtCollection: Phaser.GameObjects.RenderTexture;
+  private connections = new Map<string, Phaser.GameObjects.Sprite>();
 
   constructor(private scene: GameScene) {
     const width = level.sizeX * GRID;
@@ -141,6 +143,25 @@ export class Renderer implements RenderingAdapter {
       energyBall.follower.destroy();
       request.requester.receiveEnergy(request);
     }});
+  }
+
+  renderConnectionBetween(entityA: Unit, entityB: Unit, euclideanDistance: number): void {
+    const angle = Math.atan2(entityB.y - entityA.y, entityB.x - entityA.x);
+    const sprite = this.scene.add.sprite(entityA.x, entityA.y, getEdgeSpriteTexture(this.scene, euclideanDistance)).setDepth(Depth.NETWORK).setOrigin(0, 0.5).setRotation(angle);
+    const isRelayOrRootA = entityA.props.unitName === 'Relay' || entityA.props.unitName === 'City';
+    const isRelayOrRootB = entityB.props.unitName === 'Relay' || entityB.props.unitName === 'City';
+    if (isRelayOrRootA && isRelayOrRootB) sprite.setTint(0x0000ff); // make blue to indicate connection between relays
+    const id = entityA.id + entityB.id;
+    sprite.setData('id', id);
+    this.connections.set(id, sprite);
+  }
+
+  destroyConnectionBetween(entityA: Unit, entityB: Unit): void {
+    const sprite = this.connections.get(entityA.id + entityB.id) || this.connections.get(entityB.id + entityA.id);
+    const id = sprite?.getData('id');
+    if (!id) throw new Error('Connection sprite has no id');
+    if (sprite) sprite.destroy();
+    this.connections.delete(id);
   }
 
   private generateLayers() {

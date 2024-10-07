@@ -45,4 +45,5 @@ export const SELECTABLE_UNITS: EntityProps[] = [
   UNIT_CONFIG['Storage'],
   UNIT_CONFIG['Speed'],
   UNIT_CONFIG['Reactor']
+  // UNIT_CONFIG['EmitterWeak']
 ];

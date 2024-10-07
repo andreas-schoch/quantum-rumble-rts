@@ -19,6 +19,7 @@ export interface Vertex<T = unknown> {
 export interface PathfinderResult<V = unknown> {
   distance: number;
   path: Vertex<V>[];
+  ids: Set<VertexId>;
   found: boolean;
 }
 
@@ -30,6 +31,7 @@ export class Graph<V = {x: number, y: number}, E = unknown> {
   readonly vertices: Map<string, Vertex<V>> = new Map();
   readonly edges: Map<string, Edge<E>> = new Map();
   readonly edgesByVertex: Map<string, Edge<E>[]> = new Map();
+  private NOT_FOUND: PathfinderResult<V> = {distance: Infinity, path: [], ids: new Set(), found: false};
 
   private readonly heuristics: {[key in Heuristic]: (a: Vertex<V>, b: Vertex<V>) => number }= {
     euclidian: this.heuristicEuclidian,
@@ -65,20 +67,20 @@ export class Graph<V = {x: number, y: number}, E = unknown> {
     return success && this.vertices.size === 0 && this.edges.size === 0;
   }
 
-  getNeighbourVertices(id: VertexId): Vertex<V>[] {
+  getNeighbourVertices(id: VertexId): Vertex['id'][] {
     const edges = this.edgesByVertex.get(id);
     if (!edges) return [];
-    const neighbours: Vertex<V>[] = [];
+    const neighbours: Vertex['id'][] = [];
     edges.forEach(edge => {
       const neighbourId = edge.vertA === id ? edge.vertB : edge.vertA;
       const vert = this.vertices.get(neighbourId);
-      if (vert) neighbours.push(vert);
+      if (vert) neighbours.push(vert.id);
     });
     return neighbours;
   }
 
   createEdge(v1: VertexId, v2: VertexId, weight: number, data: E): Edge<E> {
-    const edge = { id: `${v1}-${v2}`, vertA: v1, vertB: v2, weight, data };
+    const edge = { id: v1 + v2, vertA: v1, vertB: v2, weight, data };
     this.edges.set(edge.id, edge);
     this.edgesByVertex.get(v1)?.push(edge);
     this.edgesByVertex.get(v2)?.push(edge);
@@ -86,8 +88,7 @@ export class Graph<V = {x: number, y: number}, E = unknown> {
   }
 
   getEdgeBetween(v1: VertexId, v2: VertexId): Edge<E> | null {
-    // This is a bit of a hack, but it should work as long as unique ids are enforced
-    return this.edges.get(`${v1}-${v2}`) || this.edges.get(`${v2}-${v1}`) || null;
+    return this.edges.get(v1 + v2) || this.edges.get(v2 + v1) || null;
   }
 
   removeEdgeBetween(v1: VertexId, v2: VertexId): Edge<E> | null {
@@ -113,8 +114,8 @@ export class Graph<V = {x: number, y: number}, E = unknown> {
   findPath(startId: VertexId, endId: VertexId, heuristic: Heuristic = 'euclidian',  g: Phaser.GameObjects.Graphics | null = null): PathfinderResult<V> {
     const start = this.vertices.get(startId);
     const goal = this.vertices.get(endId);
-    if (!goal || !start) return {distance: Infinity, path: [], found: false};
-    if (this.edgesByVertex.get(startId)?.length === 0 || this.edgesByVertex.get(endId)?.length === 0) return {distance: Infinity, path: [], found: false};
+    if (!goal || !start) return this.NOT_FOUND;
+    if (this.edgesByVertex.get(startId)?.length === 0 || this.edgesByVertex.get(endId)?.length === 0) return this.NOT_FOUND;
 
     const openSet: { value: Vertex<V>, fScore: number }[] = [];
     const closedSet: Set<Vertex<V>> = new Set();
@@ -142,6 +143,7 @@ export class Graph<V = {x: number, y: number}, E = unknown> {
           if (!closedSet.has(neighbour)) {
             // tiebreaker prevents visits to unneeded vertices but sacrifices a bit of accuracy
             const tiebreaker = 0.275 * (goal.x - current.x + goal.y - current.y); // adjust the hard-coded constant to change the accuracy
+            if (!neighbour || !goal) continue; // In case the vertices were destroyed while pathfinding
             openSet.push({ value: neighbour, fScore: tentativeGScore + this.heuristics[heuristic](neighbour, goal) + tiebreaker});
             needsSorting = true;
           }
@@ -153,17 +155,19 @@ export class Graph<V = {x: number, y: number}, E = unknown> {
 
     // Extract the shortest path from startId to endId using the previous map
     const path: Vertex<V>[] = [];
+    const ids = new Set<VertexId>();
     let current = goal;
     while (current && current.id !== startId) {
-      if (!cameFrom.get(current)) return {distance: Infinity, path: [], found: false}; // No path found
+      if (!cameFrom.get(current)) return this.NOT_FOUND; // No path found
       path.push(current);
+      ids.add(current.id);
       current = cameFrom.get(current)!;
     }
     path.push(start);
     path.reverse();
 
     const distance = gScore.get(goal);
-    return distance ? {distance, path, found: true} : {distance: Infinity, path: [], found: false};
+    return distance ? {distance, path, ids, found: true} : this.NOT_FOUND;
   }
 
   private heuristicEuclidian(a: Vertex<V>, b: Vertex<V>): number {

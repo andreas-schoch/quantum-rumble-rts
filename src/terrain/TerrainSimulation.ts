@@ -1,16 +1,15 @@
-import WebpackWorker from 'worker-loader!../workers/pathFinder.worker.ts';
+import GraphWorker from 'worker-loader!../workers/pathFinder.worker.ts';
 import { NoiseFunction2D, createNoise2D } from 'simplex-noise';
-import { config, Depth, ENERGY_PER_COLLECTING_CELL, EVENT_ENERGY_CONSUMPTION_CHANGE, EVENT_ENERGY_PRODUCTION_CHANGE, EVENT_ENERGY_STORAGE_CHANGE, GRID, level, SerializableEntityData, THRESHOLD, TICK_DELTA } from '../constants';
+import { config, ENERGY_PER_COLLECTING_CELL, EVENT_ENERGY_CONSUMPTION_CHANGE, EVENT_ENERGY_PRODUCTION_CHANGE, EVENT_ENERGY_STORAGE_CHANGE, GRID, level, SerializableEntityData, THRESHOLD, TICK_DELTA } from '../constants';
 import { Unit } from '../units/BaseUnit';
-import { cellIndexAt, generateId, getCellsInRange, getEdgeSpriteTexture } from '../util';
+import { cellIndexAt, generateId, getCellsInRange } from '../util';
 import { Graph, PathfinderResult } from '../Graph';
 import { Remote, wrap } from 'comlink';
 
 export interface SimulationState {
   cells: Cell[];
   root: Unit | null;
-  graph: Graph<Unit, Phaser.GameObjects.Sprite>;
-  remoteGraph: Remote<Graph>; // Computed within worker
+  graph: Remote<Graph>; // Computed within worker
   tickCounter: number;
 
   // the below data represents the "edges" of the cells indicating the fluid level, terrain elevation or collection area
@@ -43,8 +42,7 @@ export class Simulation {
   state: SimulationState = {
     cells: [],
     root: null,
-    graph: new Graph(),
-    remoteGraph: wrap(new WebpackWorker()),
+    graph: wrap(new GraphWorker()),
     prevFluidData: new Uint16Array(new ArrayBuffer(size)),
     fluidData: new Uint16Array(new ArrayBuffer(size)),
     terrainData: new Uint16Array(new ArrayBuffer(size)),
@@ -73,16 +71,7 @@ export class Simulation {
   private readonly flowNeighboursAlt = [[-1, -1], [-1, 1], [1, 1], [1, -1]];
   private readonly cellEdges = [[0, 0], [1, 0], [1, 1], [0, 1]]; // marching squares works on edges, while the rest of the game works on cells (consisting of 4 edges each)
 
-  constructor(public scene: Phaser.Scene, private observer: Phaser.Events.EventEmitter, private renderingAdapter: RenderingAdapter) {
-    this.particlePlaceEntity = this.scene.add.particles(0, 0, 'energy', {
-      frequency: -1,
-      lifespan: 150,
-      speed: {min: 200, max: 300},
-      scale: {start: 0.4, end: 0.3},
-      quantity: 1,
-      blendMode: 'ADD',
-    }).setDepth(Depth.PARTICLE_IMPACT);
-
+  constructor(private observer: Phaser.Events.EventEmitter, private renderingAdapter: RenderingAdapter) {
     this.generateWorldCells();
     this.generateTerrainData();
     for(const entityData of level.entities) this.addEntity(entityData);
@@ -105,15 +94,35 @@ export class Simulation {
     this.state.cells[entity.cellIndex].ref = entity;
     if (entity.props.isEnergyRoot) this.state.root = entity;
     if (entity.props.connectionRadius) this.connectToEnergyNetwork(entity);
-    this.particlePlaceEntity.explode(20, entity.x, entity.y);
   }
 
   removeEntity(id: Unit['id']) {
     const entity = this.state.entities.get(id);
     if (!entity) return;
+    this.state.graph.getNeighbourVertices(id).then(vertices => {
+      for (const id of vertices) {
+        if (id === entity.id) continue;
+        const otherEntity = this.state.entities.get(id);
+        if (!otherEntity) throw new Error('otherEntity not found');
+        this.renderingAdapter.destroyConnectionBetween(entity, otherEntity);
+      }
+    });
     this.state.cells[entity.cellIndex].ref = null;
     this.state.entities.delete(id);
     if (!entity.destroyed) entity.destroy();
+    this.state.graph.removeVertex(id);
+
+    // Check if we need to recompute paths for any entity which were connected to the removed entity
+    for (const entity of this.state.entities.values()) {
+      if (entity.energyPath.found && entity.energyPath.ids.has(id)) {
+        console.log('recomputing path for entity', entity.id);
+        entity.energyPath = Unit.NOT_FOUND;
+        if (entity.props.collectionRadius) {
+          this.state.collectorDataNeedsRefresh = true;
+          this.state.collectorIds.delete(entity.id);
+        }
+      }
+    }
   }
 
   requestEnergy(type: EnergyRequest['type'], amount: number, requester: Unit) {
@@ -125,26 +134,9 @@ export class Simulation {
     return request;
   }
 
-  private sendEnergyBall(request: EnergyRequest) {
-    const energyPath = request.requester.energyPath;
-    const points = energyPath.path.reduce<number[]>((acc, cur) => acc.concat(cur.x, cur.y), []);
-    const path = this.scene.add.path(points[0], points[1]);
-    for (let i = 2; i < points.length; i += 2) path.lineTo(points[i], points[i + 1]);
-    const texture = request.type === 'ammo' ? 'energy_red' : 'energy';
-    const duration = (energyPath.distance / this.state.energyTravelSpeed) * 1000;
-    // TODO do this in a phaser agnostic way. Don't use followers, or at least only for visual representation
-    const energyBall: Energy = {follower: this.scene.add.follower(path, points[0], points[1], texture), id: generateId()};
-    energyBall.follower.setScale(1).setDepth(Depth.ENERGY);
-    energyBall.follower.startFollow({duration, repeat: 0, onComplete: () => {
-      energyBall.follower.destroy();
-      request.requester.receiveEnergy(request);
-    }});
-  }
-
   private connectToEnergyNetwork(entity: Unit) {
     // Register the entity as a node in the network
-    this.state.graph.createVertex(entity.id, entity.x, entity.y, entity);
-    this.state.remoteGraph.createVertex(entity.id, entity.x, entity.y, {x: entity.x, y: entity.y});
+    this.state.graph.createVertex(entity.id, entity.x, entity.y, {x: entity.x, y: entity.y});
 
     // Connect the node to its neighbours if they are within range
     for (const [cell, distance] of getCellsInRange(this.state, entity.xCoord, entity.yCoord, entity.props.connectionRadius, true)) {
@@ -153,14 +145,8 @@ export class Simulation {
       if (cell.ref.id === entity.id) continue;
       const euclideanDistance = Math.sqrt(Math.pow(entity.x - cell.ref.x, 2) + Math.pow(entity.y - cell.ref.y, 2));
       if (distance > cell.ref.props.connectionRadius || Math.round(euclideanDistance) === 0) continue; // won't connect if neighbour has a smaller connection range
-      const angle = Math.atan2(cell.ref.y - entity.y, cell.ref.x - entity.x);
-      // TDOO try to get rid of sprite
-      const sprite = this.scene.add.sprite(entity.x, entity.y, getEdgeSpriteTexture(this.scene, euclideanDistance)).setDepth(Depth.NETWORK).setOrigin(0, 0.5).setRotation(angle);
-      const isRelayOrRoot1 = entity.props.unitName === 'Relay' || entity.props.unitName === 'City';
-      const isRelayOrRoot2 = cell.ref.props.unitName === 'Relay' || cell.ref.props.unitName === 'City';
-      if (isRelayOrRoot1 && isRelayOrRoot2) sprite.setTint(0x0000ff); // make blue to indicate connection between relays
-      this.state.graph.createEdge(entity.id, cell.ref.id, euclideanDistance * entity.props.distanceFactor, sprite); // TODO verify this works as expected with distanceFactor
-      this.state.remoteGraph.createEdge(entity.id, cell.ref.id, euclideanDistance, 'sprite placeholder');
+      this.state.graph.createEdge(entity.id, cell.ref.id, euclideanDistance, null);
+      this.renderingAdapter.renderConnectionBetween(entity, cell.ref, euclideanDistance);
     }
   }
 
@@ -398,7 +384,7 @@ export class Simulation {
     if (!this.state.root) throw new Error('root is null');
     const start = this.state.root.id;
     const end = structure.id;
-    const res = await this.state.remoteGraph.findPath(start, end, 'euclidian');
+    const res = await this.state.graph.findPath(start, end, 'euclidian');
     let invalid = false;
     for (const vert of res.path) {
       if (vert.id === structure.id) continue;
@@ -408,7 +394,7 @@ export class Simulation {
         break;
       }
     }
-    return invalid ? { path: [], distance: Infinity, found: false } : res;
+    return invalid ? { path: [], distance: Infinity, ids: new Set(), found: false } : res;
   }
 }
 
@@ -455,4 +441,7 @@ export interface RenderingAdapter {
   renderCollectionArea(world: Cell[], cd: Uint8Array): void;
   renderFluid(world: Cell[], fluid: Uint16Array, terrain: Uint16Array): void;
   renderEnergyBall(state: SimulationState, request: EnergyRequest): void;
+
+  renderConnectionBetween(entityA: Unit, entityB: Unit, euclideanDistance: number): unknown;
+  destroyConnectionBetween(entityA: Unit, entityB: Unit): unknown;
 }

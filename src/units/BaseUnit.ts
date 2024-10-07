@@ -15,7 +15,7 @@ export class Unit implements SerializableEntityData {
   y: number;
   cellIndex: number;
 
-  energyPath: PathfinderResult<{x: number, y: number}> = {found: false, distance: Infinity, path: []};
+  energyPath: PathfinderResult<{x: number, y: number}> = {found: false, distance: Infinity, path: [], ids: new Set()};
   findPathAsyncInProgress = false;
 
   sprites: Phaser.GameObjects.Sprite[] = [];
@@ -41,11 +41,17 @@ export class Unit implements SerializableEntityData {
   textureKeysBlast: Set<string> = new Set();
   energyRequestCooldown = 10; // every 10 ticks (500ms)
 
+  // TODO try to remove phaser dependencies completely from Unit. Everything visual should happen in the rendering adapter.
+  //  Not a priority but I like to be able to run the simulation without a renderer or with different renderers
+  static scene: Phaser.Scene;
+  static particlePlaceEntity: Phaser.GameObjects.Particles.ParticleEmitter;
   static particleImpact: Phaser.GameObjects.Particles.ParticleEmitter;
+  static sfx_place_structure:  Phaser.Sound.BaseSound;
   static sfx_startCollect: Phaser.Sound.BaseSound;
   static sfx_blasterHit: Phaser.Sound.BaseSound;
   static sfx_mortarShellHit: Phaser.Sound.BaseSound;
   static sfx_mortarShellStart: Phaser.Sound.BaseSound;
+  static NOT_FOUND: PathfinderResult<{x: number, y: number}> = {distance: Infinity, path: [], ids: new Set(), found: false};
 
   constructor(private simulation: Simulation, data: SerializableEntityData) {
     this.id = data.id || generateId();
@@ -60,26 +66,26 @@ export class Unit implements SerializableEntityData {
     const elevation = computeTerrainElevation(this.cellIndex, simulation.state);
     if (elevation % (THRESHOLD * 3) !== 0) throw new Error('Structure must be placed on a cell where all 4 edges are on the same elevation layer');
 
-    this.initStatic();
+    Unit.particlePlaceEntity.explode(20, this.x, this.y);
 
-    this.remainingBuildCost = this.props.buildCost || 0;
+    this.remainingBuildCost = this.props.buildCost;
 
-    this.sprites = data.props.spriteKeys?.map(key => simulation.scene.add.sprite(this.x, this.y, key).setDepth(Depth.UNIT).setAlpha(0.3));
+    this.sprites = data.props.spriteKeys?.map(key => Unit.scene.add.sprite(this.x, this.y, key).setDepth(Depth.UNIT).setAlpha(0.3));
 
-    if (this.props.healthMax >= 1) this.healthBar = simulation.scene.add.graphics().setDepth(Depth.AMMO_CIRCLE);
+    if (this.props.healthMax >= 1) this.healthBar = Unit.scene.add.graphics().setDepth(Depth.AMMO_CIRCLE);
 
     if (data.props.unitName === 'Blaster') {
       const indices = computeClosestCellIndicesInRange(this.simulation.state, this.xCoord, this.yCoord, this.props.attackRadius);
       this.cellIndicesInAttackRange = indices.filter(i => simulation.state.terrainData[i] <= elevation);
-      this.ammoCircle = simulation.scene.add.graphics().setDepth(Depth.AMMO_CIRCLE);
-      this.blastSprite = simulation.scene.add.sprite(this.x, this.y, this.getBlastSpriteTexture(this.props.attackRadius * GRID)).setDepth(Depth.MORTAR_SHELL).setVisible(false).setOrigin(0, 0.25);
+      this.ammoCircle = Unit.scene.add.graphics().setDepth(Depth.AMMO_CIRCLE);
+      this.blastSprite = Unit.scene.add.sprite(this.x, this.y, this.getBlastSpriteTexture(this.props.attackRadius * GRID)).setDepth(Depth.MORTAR_SHELL).setVisible(false).setOrigin(0, 0.25);
       this.renderAmmo();
     } else if (data.props.unitName === 'Mortar') {
       this.cellIndicesInAttackRange = computeClosestCellIndicesInRange(this.simulation.state, this.xCoord, this.yCoord, this.props.attackRadius);
-      this.ammoCircle = simulation.scene.add.graphics().setDepth(Depth.AMMO_CIRCLE);
-      this.mortarShells.push(simulation.scene.add.sprite(this.x, this.y, 'Mortar_shell').setDepth(Depth.MORTAR_SHELL).setScale(1).setVisible(false));
-      this.mortarShells.push(simulation.scene.add.sprite(this.x, this.y, 'Mortar_shell').setDepth(Depth.MORTAR_SHELL).setScale(1).setVisible(false));
-      this.mortarShells.push(simulation.scene.add.sprite(this.x, this.y, 'Mortar_shell').setDepth(Depth.MORTAR_SHELL).setScale(1).setVisible(false));
+      this.ammoCircle = Unit.scene.add.graphics().setDepth(Depth.AMMO_CIRCLE);
+      this.mortarShells.push(Unit.scene.add.sprite(this.x, this.y, 'Mortar_shell').setDepth(Depth.MORTAR_SHELL).setScale(1).setVisible(false));
+      this.mortarShells.push(Unit.scene.add.sprite(this.x, this.y, 'Mortar_shell').setDepth(Depth.MORTAR_SHELL).setScale(1).setVisible(false));
+      this.mortarShells.push(Unit.scene.add.sprite(this.x, this.y, 'Mortar_shell').setDepth(Depth.MORTAR_SHELL).setScale(1).setVisible(false));
       this.sprites[1].setVisible(false);
     }
 
@@ -122,7 +128,7 @@ export class Unit implements SerializableEntityData {
   private checkEnergyNeeds() {
     if (this.destroyed || !this.active) return;
 
-    if (!this.energyPath.found) {
+    if (!this.energyPath.found && this.props.unitName !== 'City') {
       if (!this.findPathAsyncInProgress) this.findPathAsync();
       return;
     }
@@ -186,6 +192,7 @@ export class Unit implements SerializableEntityData {
   }
 
   private findPathAsync() {
+    if (this.destroyed) return;
     const tickCounter = this.simulation.state.tickCounter;
     if (tickCounter - this.lastPathFindAttempt < 20) return;
     this.findPathAsyncInProgress = true;
@@ -193,18 +200,24 @@ export class Unit implements SerializableEntityData {
     this.simulation.findPathToEnergySourceAsync(this).then(path => {
       this.energyPath = path;
       this.findPathAsyncInProgress = false;
+      if (path.found && this.built) {
+        if (this.props.unitName === 'Collector') {
+          this.simulation.state.collectorDataNeedsRefresh = true;
+          this.simulation.state.collectorIds.add(this.id);
+        }
+      }
     });
   }
 
   private build(amount: number) {
-    if (this.built || this.destroyed) return;
+    if (this.built || this.destroyed || (this.props.unitName !== 'City' && !this.energyPath.found)) return;
     this.remainingBuildCost = Math.max(this.remainingBuildCost - amount, 0);
     if (this.remainingBuildCost > 0) return;
 
     this.built = true;
     this.healthCurrent = this.props.healthMax;
     this.sprites.forEach(sprite => sprite.setAlpha(1));
-    if (this.props.collectionRadius) {
+    if (this.props.unitName === 'Collector') {
       this.simulation.state.collectorDataNeedsRefresh = true;
       this.simulation.state.collectorIds.add(this.id);
     }
@@ -222,6 +235,7 @@ export class Unit implements SerializableEntityData {
     if (this.healthBar) this.healthBar.destroy();
     if (this.blastSprite) this.blastSprite.destroy();
     this.mortarShells.forEach(shell => shell.destroy());
+    Unit.particleImpact.explode(20, this.x, this.y);
     this.destroyed = true;
     this.healthCurrent = 0;
     this.simulation.removeEntity(this.id);
@@ -277,7 +291,7 @@ export class Unit implements SerializableEntityData {
     const key = `blast-${Math.round(euclideanDistance)}`;
     if (!this.textureKeysBlast.has(key)) {
       const WIDTH = 5;
-      const graphics = this.simulation.scene.add.graphics();
+      const graphics = Unit.scene.add.graphics();
       graphics.lineStyle(WIDTH, 0xff0000, 1);
       graphics.lineBetween(HALF_GRID * 3, 0, euclideanDistance, 0);
       graphics.generateTexture(key, euclideanDistance, WIDTH);
@@ -367,7 +381,7 @@ export class Unit implements SerializableEntityData {
     const maxDistance = this.props.attackRadius * GRID;
     const TOTAL_DURATION = 1500 * (distance / maxDistance);
     Unit.sfx_mortarShellStart.play();
-    const tween = this.simulation.scene.tweens.add({
+    const tween = Unit.scene.tweens.add({
       targets: this.mortarShells[0],
       x: { value: highestFluidCell.x, duration: TOTAL_DURATION, ease: 'Linear' },
       y: { value: highestFluidCell.y, duration: TOTAL_DURATION, ease: 'Linear' },
@@ -402,18 +416,32 @@ export class Unit implements SerializableEntityData {
     this.renderHealth();
   }
 
-  private initStatic() {
-    if (!Unit.sfx_startCollect) Unit.sfx_startCollect = this.simulation.scene.sound.add('start_collect', {detune: 600, rate: 1.25, volume: 0.35 , loop: false});
-    if (!Unit.sfx_blasterHit) Unit.sfx_blasterHit = this.simulation.scene.sound.add('attack_turret', {detune: 0, rate: 1.25, volume: 0.35 , loop: false});
-    if (!Unit.sfx_mortarShellHit) Unit.sfx_mortarShellHit = this.simulation.scene.sound.add('attack_turret', {detune: -1000, rate: 0.5, volume: 1.5, loop: false});
-    if (!Unit.sfx_mortarShellStart) Unit.sfx_mortarShellStart = this.simulation.scene.sound.add('attack_turret', {detune: -600, rate: 1.75, volume: 0.7, loop: false});
+  static initStatic(scene: Phaser.Scene) {
+    Unit.scene = scene;
+    if (!Unit.sfx_place_structure) Unit.sfx_place_structure = scene.sound.add('place_structure', {detune: 200, rate: 1.25, volume: 1 , loop: false});
+
+    if (!Unit.sfx_startCollect) Unit.sfx_startCollect = scene.sound.add('start_collect', {detune: 600, rate: 1.25, volume: 0.35 , loop: false});
+    if (!Unit.sfx_blasterHit) Unit.sfx_blasterHit = scene.sound.add('attack_turret', {detune: 0, rate: 1.25, volume: 0.35 , loop: false});
+    if (!Unit.sfx_mortarShellHit) Unit.sfx_mortarShellHit = scene.sound.add('attack_turret', {detune: -1000, rate: 0.5, volume: 1.5, loop: false});
+    if (!Unit.sfx_mortarShellStart) Unit.sfx_mortarShellStart = scene.sound.add('attack_turret', {detune: -600, rate: 1.75, volume: 0.7, loop: false});
 
     if (!Unit.particleImpact) {
-      Unit.particleImpact = this.simulation.scene.add.particles(0, 0, 'energy_red', {
+      Unit.particleImpact = scene.add.particles(0, 0, 'energy_red', {
         frequency: -1,
         lifespan: 200,
         speed: {min: 200, max: 300},
         scale: {start: 0.4, end: 0.2},
+        quantity: 1,
+        blendMode: 'ADD',
+      }).setDepth(Depth.PARTICLE_IMPACT);
+    }
+
+    if (!Unit.particlePlaceEntity) {
+      Unit.particlePlaceEntity = scene.add.particles(0, 0, 'energy', {
+        frequency: -1,
+        lifespan: 150,
+        speed: {min: 200, max: 300},
+        scale: {start: 0.4, end: 0.3},
         quantity: 1,
         blendMode: 'ADD',
       }).setDepth(Depth.PARTICLE_IMPACT);

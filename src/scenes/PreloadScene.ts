@@ -181,15 +181,10 @@ export default class PreloadScene extends Phaser.Scene {
 }
 
 // TODOS
-// - Add sfx back again
 // - Re-run pathfinding every once in a while
 // - Refactor to not rely on phaser followers for energy balls
-// - Disconnect entities from the network when part of their path gets destroyed. Ideally keep a set of node ids for each entity and iterate over all entities to check if they were affected by a path destruction.
-//   If yes, try to find a new path for them. If no path is found, disconnect them from the network.
 // - Ability to move weapons
-// - Display health bar while building and when damaged until health is full again.
 // - Add a win condition. I guess the original 3 totems the city has to connect to is fine
 // - Refactor UI to use solidJS
 // - Add multiple levels that can be selected from a menu
-// - Remove connections when node gets destroyed or deleted
 // - Show UI when selecting a unit with buttons to deactivate and destroy unit

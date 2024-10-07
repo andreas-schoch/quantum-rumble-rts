@@ -5,6 +5,7 @@ import { Tilemaps } from 'phaser';
 import { Renderer } from '../terrain/Renderer';
 import { Previewer } from '../Previewer';
 import { canPlaceEntityAt } from '../util';
+import { Unit } from '../units/BaseUnit';
 
 export default class GameScene extends Phaser.Scene {
   observer: Phaser.Events.EventEmitter = new Phaser.Events.EventEmitter();
@@ -35,7 +36,8 @@ export default class GameScene extends Phaser.Scene {
     this.setupCameraAndInput();
     this.observer.removeAllListeners();
 
-    this.simulation = new Simulation(this, this.observer, new Renderer(this));
+    Unit.initStatic(this);
+    this.simulation = new Simulation(this.observer, new Renderer(this));
     this.previewer = new Previewer(this, this.simulation.state);
 
     setInterval(() => this.simulation.step(), TICK_RATE);
