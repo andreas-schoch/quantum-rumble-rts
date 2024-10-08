@@ -1,6 +1,6 @@
 import GraphWorker from 'worker-loader!../workers/pathFinder.worker.ts';
 import { NoiseFunction2D, createNoise2D } from 'simplex-noise';
-import { config, ENERGY_PER_COLLECTING_CELL, EVENT_ENERGY_CONSUMPTION_CHANGE, EVENT_ENERGY_PRODUCTION_CHANGE, EVENT_ENERGY_STORAGE_CHANGE, GRID, level, SerializableEntityData, THRESHOLD, TICK_DELTA } from '../constants';
+import { config, ENERGY_PER_COLLECTING_CELL, EVENT_ENERGY_CONSUMPTION_CHANGE, EVENT_ENERGY_PRODUCTION_CHANGE, EVENT_ENERGY_STORAGE_CHANGE, GRID, level, THRESHOLD, TICK_DELTA } from '../constants';
 import { Unit } from '../units/BaseUnit';
 import { cellIndexAt, generateId, getCellsInRange } from '../util';
 import { Graph, PathfinderResult } from '../Graph';
@@ -30,8 +30,9 @@ export interface SimulationState {
   fluidChangeRequests: {xCoord: number, yCoord: number, amount: number}[];
 
   entities: Map<Unit['id'], Unit>;
-  emitterIds: Set<string>;
-  collectorIds: Set<string>;
+  emitterIds: Set<Unit['id']>;
+  collectorIds: Set<Unit['id']>;
+  selectedEntityId: Unit['id'] | null;
 
   collectorDataNeedsRefresh: boolean;
   isPaused: boolean;
@@ -60,6 +61,7 @@ export class Simulation {
     entities: new Map(),
     emitterIds: new Set(),
     collectorIds: new Set(),
+    selectedEntityId: null,
     collectorDataNeedsRefresh: false,
     isPaused: false,
     tickCounter: 0,
@@ -71,10 +73,10 @@ export class Simulation {
   private readonly flowNeighboursAlt = [[-1, -1], [-1, 1], [1, 1], [1, -1]];
   private readonly cellEdges = [[0, 0], [1, 0], [1, 1], [0, 1]]; // marching squares works on edges, while the rest of the game works on cells (consisting of 4 edges each)
 
-  constructor(private observer: Phaser.Events.EventEmitter, private renderingAdapter: RenderingAdapter) {
+  constructor(private observer: Phaser.Events.EventEmitter, public renderingAdapter: RenderingAdapter) {
     this.generateWorldCells();
     this.generateTerrainData();
-    for(const entityData of level.entities) this.addEntity(entityData);
+    for(const entityData of level.entities) new Unit(this, entityData);
   }
 
   step() {
@@ -84,16 +86,6 @@ export class Simulation {
     this.fluidFlow();
     this.updateCollectorData();
     for(const entity of this.state.entities.values()) entity.step();
-  }
-
-  addEntity(data: SerializableEntityData) {
-    const entity = new Unit(this, data);
-    this.state.entities.set(entity.id, entity);
-
-    if (this.state.cells[entity.cellIndex].ref) throw new Error('Cell is already occupied');
-    this.state.cells[entity.cellIndex].ref = entity;
-    if (entity.props.isEnergyRoot) this.state.root = entity;
-    if (entity.props.connectionRadius) this.connectToEnergyNetwork(entity);
   }
 
   removeEntity(id: Unit['id']) {
@@ -109,14 +101,14 @@ export class Simulation {
     });
     this.state.cells[entity.cellIndex].ref = null;
     this.state.entities.delete(id);
-    if (!entity.destroyed) entity.destroy();
+    if (!entity.isDestroyed) entity.destroy();
     this.state.graph.removeVertex(id);
 
     // Check if we need to recompute paths for any entity which were connected to the removed entity
     for (const entity of this.state.entities.values()) {
       if (entity.energyPath.found && entity.energyPath.ids.has(id)) {
-        console.log('recomputing path for entity', entity.id);
-        entity.energyPath = Unit.NOT_FOUND;
+        // entity.energyPath = Unit.NOT_FOUND;
+        entity.resetPath();
         if (entity.props.collectionRadius) {
           this.state.collectorDataNeedsRefresh = true;
           this.state.collectorIds.delete(entity.id);
@@ -126,7 +118,7 @@ export class Simulation {
   }
 
   requestEnergy(type: EnergyRequest['type'], amount: number, requester: Unit) {
-    if (requester.destroyed) throw new Error('This structure is already destroyed');
+    if (requester.isDestroyed) throw new Error('This structure is already destroyed');
     if (requester.props.isEnergyRoot) throw new Error('Energy roots cannot request energy');
     if (!requester.energyPath.found) throw new Error('This structure is not connected to an energy source. ID: ' + requester.id);
     const request: EnergyRequest = {id: generateId(), type, amount, requester};
@@ -134,7 +126,7 @@ export class Simulation {
     return request;
   }
 
-  private connectToEnergyNetwork(entity: Unit) {
+  connectToEnergyNetwork(entity: Unit) {
     // Register the entity as a node in the network
     this.state.graph.createVertex(entity.id, entity.x, entity.y, {x: entity.x, y: entity.y});
 
@@ -143,10 +135,10 @@ export class Simulation {
       if (!cell.ref) continue;
       if (!cell.ref.props.isRelay && !entity.props.isRelay) continue; // non-relay structures cannot connect to each other
       if (cell.ref.id === entity.id) continue;
-      const euclideanDistance = Math.sqrt(Math.pow(entity.x - cell.ref.x, 2) + Math.pow(entity.y - cell.ref.y, 2));
-      if (distance > cell.ref.props.connectionRadius || Math.round(euclideanDistance) === 0) continue; // won't connect if neighbour has a smaller connection range
-      this.state.graph.createEdge(entity.id, cell.ref.id, euclideanDistance, null);
-      this.renderingAdapter.renderConnectionBetween(entity, cell.ref, euclideanDistance);
+      const distancePixel = distance * GRID;
+      if (distance > cell.ref.props.connectionRadius || Math.floor(distance) === 0) continue; // won't connect if neighbour has a smaller connection range
+      this.state.graph.createEdge(entity.id, cell.ref.id, distancePixel, null);
+      this.renderingAdapter.renderConnectionBetween(entity, cell.ref, distancePixel);
     }
   }
 

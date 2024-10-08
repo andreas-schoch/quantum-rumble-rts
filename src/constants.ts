@@ -42,10 +42,12 @@ export enum Depth {
   UNIT,
   PREVIEW_UNIT,
   ENERGY, // energy ball moving over network
+  UNIT_SELECTION_OUTLINE,
   FLUID,
   EMITTER,
   MORTAR_SHELL,
-  PARTICLE_IMPACT
+  PARTICLE_IMPACT,
+  UNIT_MOVING,
 }
 
 export const THRESHOLD = 1000;
@@ -115,8 +117,6 @@ export interface SerializableEntityData {
   yCoord: number;
   active: boolean;
   built: boolean;
-  // destroyed: boolean;
-  // elevation: number;
   props: EntityProps;
 }
 

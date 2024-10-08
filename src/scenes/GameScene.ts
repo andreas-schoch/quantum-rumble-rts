@@ -16,7 +16,7 @@ export default class GameScene extends Phaser.Scene {
   pointerCoordX: number | null = null;
   pointerCoordY: number;
   sfx_place_structure: Phaser.Sound.BaseSound;
-  selectedUnit: EntityProps | null;
+  unitToPlace: EntityProps | null;
   simulation: Simulation;
   tilemap: Tilemaps.Tilemap;
   tileset: Tilemaps.Tileset | null;
@@ -116,40 +116,61 @@ export default class GameScene extends Phaser.Scene {
       const pointerCoordX = Math.floor(worldX / GRID);
       const pointerCoordY = Math.floor(worldY / GRID);
       // Compare with previous to avoid unnecessary updates
-      if (!p.isDown && this.selectedUnit && (this.pointerCoordX !== pointerCoordX || this.pointerCoordY !== pointerCoordY)) {
-        this.previewer.previewEntity(pointerCoordX, pointerCoordY, this.selectedUnit);
+      if (!p.isDown && this.unitToPlace && (this.pointerCoordX !== pointerCoordX || this.pointerCoordY !== pointerCoordY)) {
+        this.previewer.previewEntity(pointerCoordX, pointerCoordY, this.unitToPlace);
         this.pointerCoordX = pointerCoordX;
         this.pointerCoordY = pointerCoordY;
       }
     });
 
-    input.on('pointerdown', (p: Phaser.Input.Pointer) => {
-      if (!this.selectedUnit) return;
+    input.on('pointerdown', (p: Phaser.Input.Pointer, objs) => {
+      // if (!this.selectedUnit) return;
       this.pointerCoordX = Math.floor(p.worldX / GRID);
       this.pointerCoordY = Math.floor(p.worldY / GRID);
       const {pointerCoordX, pointerCoordY} = this;
       if (pointerCoordX === null || pointerCoordY === null) return;
       if (pointerCoordX < 0 || pointerCoordY < 0 || pointerCoordX > level.sizeX || pointerCoordY > level.sizeY) return; // skip out of bounds
 
-      if (this.selectedUnit && canPlaceEntityAt(pointerCoordX, pointerCoordY, this.simulation.state)) {
+      if (this.unitToPlace) {
+        // PLACE NEW ENTITY INTO SIMULATION
+        if (!canPlaceEntityAt(pointerCoordX, pointerCoordY, this.simulation.state)) return;
         this.sfx_place_structure.play();
-        this.simulation.addEntity({active: true, built: false, xCoord: pointerCoordX, yCoord: pointerCoordY, props: this.selectedUnit});
+        new Unit(this.simulation, {active: true, built: false, xCoord: pointerCoordX, yCoord: pointerCoordY, props: this.unitToPlace});
+        // this.simulation.addEntity({active: true, built: false, xCoord: pointerCoordX, yCoord: pointerCoordY, props: this.unitToPlace});
+      } else if (this.simulation.state.selectedEntityId) {
+        const entity = this.simulation.state.entities.get(this.simulation.state.selectedEntityId);
+        if (entity?.props.movable) {
+          // MOVE SELECTED ENTITY
+          if (!entity) throw new Error('selected entity not found');
+          if (!canPlaceEntityAt(pointerCoordX, pointerCoordY, this.simulation.state)) return;
+          entity.moveTo(pointerCoordX, pointerCoordY);
+        } else {
+          // UNSELECT NON-MOVABLE ENTITY
+          this.simulation.state.selectedEntityId = null;
+        }
+      } else  {
+        // SELECT ENTITY
+        if (!objs.length) return;
+        const EntityId = objs[0].getData('id');
+        console.log('select', EntityId);
+        if (typeof EntityId !== 'string') return;
+        this.simulation.state.selectedEntityId = EntityId;
       }
-      // else console.log('TODO implement select'); // TODO find structure under click and select it (show info about it in the UI)
     });
 
     input.on('wheel', (pointer: Phaser.Input.Pointer, gameObjects: unknown[], deltaX: number, deltaY: number) => {
       const newZoom = camera.zoom - (deltaY > 0 ? 0.025 : -0.025);
-      const clampedZoom = Phaser.Math.Clamp(newZoom, 2/3, 4/3);
+      const clampedZoom = Phaser.Math.Clamp(newZoom, MIN_ZOOM, MAX_ZOOM);
       camera.zoom = clampedZoom;
     });
   }
 
   private selectUnit(index: number, notifyUI = true) {
+    this.simulation.state.selectedEntityId = null;
     const unitProps: EntityProps | null = SELECTABLE_UNITS[index] || null;
     this.previewer.previewCancel();
     this.previewer.previewEntity(this.pointerCoordX, this.pointerCoordY, unitProps);
-    this.selectedUnit = unitProps;
-    notifyUI && this.observer.emit(EVENT_UNIT_SELECTION_CHANGE,  index);
+    this.unitToPlace = unitProps;
+    if(notifyUI) this.observer.emit(EVENT_UNIT_SELECTION_CHANGE,  index);
   }
 }

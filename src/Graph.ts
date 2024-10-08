@@ -54,7 +54,14 @@ export class Graph<V = {x: number, y: number}, E = unknown> {
     const edges = this.edgesByVertex.get(id);
     this.edgesByVertex.delete(id);
     if (!edges) return true;
-    edges.forEach(edge => this.edges.delete(edge.id));
+    edges.forEach(edge => {
+      const otherVertId = edge.vertA === id ? edge.vertB : edge.vertA;
+      // remove the edge from the other vertex map as well
+      const filtered = this.edgesByVertex.get(otherVertId)?.filter(e => e.id !== edge.id) || [];
+      this.edgesByVertex.set(otherVertId, filtered);
+      this.edges.delete(edge.id);
+    });
+
     return true;
   }
 

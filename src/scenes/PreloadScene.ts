@@ -183,8 +183,9 @@ export default class PreloadScene extends Phaser.Scene {
 // TODOS
 // - Re-run pathfinding every once in a while
 // - Refactor to not rely on phaser followers for energy balls
-// - Ability to move weapons
 // - Add a win condition. I guess the original 3 totems the city has to connect to is fine
 // - Refactor UI to use solidJS
 // - Add multiple levels that can be selected from a menu
 // - Show UI when selecting a unit with buttons to deactivate and destroy unit
+// - Add Nullifier to destroy emitters
+// - Add rifts which you have to connect to to end the game
