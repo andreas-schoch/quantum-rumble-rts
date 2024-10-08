@@ -249,7 +249,7 @@ export class Simulation {
 
     const totalFluidAfter = fluidData.reduce((acc, cur) => acc + cur, 0);
     console.assert(totalFluid === (totalFluidAfter), 'loss of density due to adding or subtracting fractions to uint16array');
-    this.renderingAdapter.renderFluid(this.state.cells, fluidData, this.state.terrainData);
+    this.renderingAdapter.renderFluid(this.state);
   }
 
   // TODO only collect from same elevation as collector.
@@ -291,7 +291,7 @@ export class Simulation {
 
     this.state.energyCollecting = collectingCells * ENERGY_PER_COLLECTING_CELL;
     this.state.collectorDataNeedsRefresh = false;
-    this.renderingAdapter.renderCollectionArea(this.state.cells, this.state.collectionData);
+    this.renderingAdapter.renderCollectionArea(this.state);
   }
 
   private generateWorldCells() {
@@ -369,7 +369,7 @@ export class Simulation {
       }
     }
 
-    this.renderingAdapter.renderTerrain(this.state.cells, this.state.terrainData);
+    this.renderingAdapter.renderTerrain(this.state);
   }
 
   async findPathToEnergySourceAsync(structure: Unit): Promise<PathfinderResult<{x: number, y: number}>> {
@@ -429,9 +429,9 @@ export interface Cell {
 }
 
 export interface RenderingAdapter {
-  renderTerrain(world: Cell[], terrainData: Uint16Array): void;
-  renderCollectionArea(world: Cell[], cd: Uint8Array): void;
-  renderFluid(world: Cell[], fluid: Uint16Array, terrain: Uint16Array): void;
+  renderTerrain(state: SimulationState): void;
+  renderCollectionArea(state: SimulationState): void;
+  renderFluid(state: SimulationState): void;
   renderEnergyBall(state: SimulationState, request: EnergyRequest): void;
 
   renderConnectionBetween(entityA: Unit, entityB: Unit, euclideanDistance: number): unknown;

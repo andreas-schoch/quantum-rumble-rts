@@ -167,7 +167,7 @@ export const UNIT_CONFIG: Record<string, EntityProps> = {
     buildCost: 0,
     connectionRadius: 19,
     collectionRadius: 7,
-    energyProduction: 0.8 * 50,
+    energyProduction: 0.8,
     energyStorageCapacity: 20,
     healthMax: 8000,
     healthRegenPerSecond: 1,

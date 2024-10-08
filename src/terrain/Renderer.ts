@@ -3,7 +3,7 @@ import { MarchingSquares } from './MarchingSquares';
 import { config, Depth, GRID, level, SPACE_BETWEEN, THRESHOLD } from '../constants';
 import GameScene from '../scenes/GameScene';
 import { generateId, getEdgeSpriteTexture, getVisibleBounds } from '../util';
-import { Cell, Energy, EnergyRequest, RenderingAdapter, SimulationState } from './TerrainSimulation';
+import { Energy, EnergyRequest, RenderingAdapter, SimulationState } from './TerrainSimulation';
 import { Unit } from '../units/BaseUnit.js';
 
 export class Renderer implements RenderingAdapter {
@@ -32,8 +32,7 @@ export class Renderer implements RenderingAdapter {
     this.generateLayers();
   }
 
-  renderTerrain(world: Cell[], terrainData: Uint16Array) {
-    // console.time('renderTerrain');
+  renderTerrain(state: SimulationState) {
     // BOTTOM LAYER
     const graphics = this.scene.add.graphics();
     const BASE_TERRAIN_COLOR = 0x544741;
@@ -46,12 +45,12 @@ export class Renderer implements RenderingAdapter {
     for (const {elevation} of config.terrainLayers) {
       const key = 'terrain_' + elevation;
       const terrainElevationAbove = elevation + THRESHOLD * 3;
-      for (const {edgeIndexTL, edgeIndexTR, edgeIndexBL, edgeIndexBR, x, y} of world) {
+      for (const {edgeIndexTL, edgeIndexTR, edgeIndexBL, edgeIndexBR, x, y} of state.cells) {
 
-        const tl = terrainData[edgeIndexTL];
-        const tr = terrainData[edgeIndexTR];
-        const br = terrainData[edgeIndexBR];
-        const bl = terrainData[edgeIndexBL];
+        const tl = state.terrainData[edgeIndexTL];
+        const tr = state.terrainData[edgeIndexTR];
+        const br = state.terrainData[edgeIndexBR];
+        const bl = state.terrainData[edgeIndexBL];
 
         const shapeIndexAbove = this.marchingSquares.getShapeIndex(tl, tr, br, bl, terrainElevationAbove);
         if (shapeIndexAbove === 15) continue; // prevent drawing invisible terrain
@@ -65,18 +64,24 @@ export class Renderer implements RenderingAdapter {
     graphics.destroy();
   }
 
-  renderCollectionArea(world: Cell[], cd: Uint8Array) {
+  renderCollectionArea(state: SimulationState) {
     this.rtCollection.clear();
     this.rtCollection.beginDraw();
-    for (const {edgeIndexTL, edgeIndexTR, edgeIndexBL, edgeIndexBR, xCoord, yCoord} of world) {
-      const shape = this.marchingSquares.getShapeIndex(cd[edgeIndexTL], cd[edgeIndexTR], cd[edgeIndexBR], cd[edgeIndexBL], 1);
+    for (const {edgeIndexTL, edgeIndexTR, edgeIndexBL, edgeIndexBR, xCoord, yCoord} of state.cells) {
+      const shape = this.marchingSquares.getShapeIndex(
+        state.collectionData[edgeIndexTL],
+        state.collectionData[edgeIndexTR],
+        state.collectionData[edgeIndexBR],
+        state.collectionData[edgeIndexBL],
+        1
+      );
       if (shape === 0) continue;
       this.rtCollection.batchDrawFrame('collection_area', shape, xCoord * GRID, yCoord * GRID);
     }
     this.rtCollection.endDraw();
   }
 
-  renderFluid(world: Cell[], fluid: Uint16Array, terrain: Uint16Array): void {
+  renderFluid(state: SimulationState): void {
     this.rtFluid.clear();
     this.rtFluid.setBlendMode(Phaser.BlendModes.NORMAL);
     this.rtFluid.beginDraw();
@@ -93,21 +98,21 @@ export class Renderer implements RenderingAdapter {
 
     for (let y = startY; y <= endY; y++) {
       for (let x = startX; x <= endX; x++) {
-        const cell = world[y * rowOffset + x];
-        const terrainTL = terrain[cell.edgeIndexTL];
-        const terrainTR = terrain[cell.edgeIndexTR];
-        const terrainBR = terrain[cell.edgeIndexBR];
-        const terrainBL = terrain[cell.edgeIndexBL];
+        const cell = state.cells[y * rowOffset + x];
+        const terrainTL = state.terrainData[cell.edgeIndexTL];
+        const terrainTR = state.terrainData[cell.edgeIndexTR];
+        const terrainBR = state.terrainData[cell.edgeIndexBR];
+        const terrainBL = state.terrainData[cell.edgeIndexBL];
 
-        let fluidTL = fluid[cell.edgeIndexTL];
-        let fluidTR = fluid[cell.edgeIndexTR];
-        let fluidBR = fluid[cell.edgeIndexBR];
-        let fluidBL = fluid[cell.edgeIndexBL];
+        let fluidTL = state.fluidData[cell.edgeIndexTL];
+        let fluidTR = state.fluidData[cell.edgeIndexTR];
+        let fluidBR = state.fluidData[cell.edgeIndexBR];
+        let fluidBL = state.fluidData[cell.edgeIndexBL];
 
-        if (fluidTL >= THRESHOLD) fluidTL += terrain[cell.edgeIndexTL];
-        if (fluidTR >= THRESHOLD) fluidTR += terrain[cell.edgeIndexTR];
-        if (fluidBR >= THRESHOLD) fluidBR += terrain[cell.edgeIndexBR];
-        if (fluidBL >= THRESHOLD) fluidBL += terrain[cell.edgeIndexBL];
+        if (fluidTL >= THRESHOLD) fluidTL += terrainTL;
+        if (fluidTR >= THRESHOLD) fluidTR += terrainTR;
+        if (fluidBR >= THRESHOLD) fluidBR += terrainBR;
+        if (fluidBL >= THRESHOLD) fluidBL += terrainBL;
 
         let shapeBelow = -1;
         for (const {elevation} of config.fluidLayers) {

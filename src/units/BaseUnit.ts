@@ -227,7 +227,7 @@ export class Unit implements SerializableEntityData {
     this.built = true;
     this.healthCurrent = this.props.healthMax;
     this.sprites.forEach(sprite => sprite.setAlpha(1));
-    if (this.props.unitName === 'Collector') {
+    if (this.props.unitName === 'Collector' || this.props.unitName === 'City') {
       this.simulation.state.collectorDataNeedsRefresh = true;
       this.simulation.state.collectorIds.add(this.id);
     }
@@ -253,8 +253,10 @@ export class Unit implements SerializableEntityData {
     if (this.props.energyStorageCapacity) this.simulation.state.energyStorageMax -= this.props.energyStorageCapacity;
     if (this.props.energyProduction) this.simulation.state.energyProducing -= this.props.energyProduction;
     if (this.props.speedIncrease) this.simulation.state.energyTravelSpeed -= this.props.speedIncrease;
-    if (this.props.collectionRadius) this.simulation.state.collectorDataNeedsRefresh = true;
-    if (this.props.collectionRadius) this.simulation.state.collectorIds.delete(this.id);
+    if (this.props.collectionRadius) {
+      this.simulation.state.collectorDataNeedsRefresh = true;
+      this.simulation.state.collectorIds.delete(this.id);
+    }
     if (this.props.fluidPerSecond) this.simulation.state.emitterIds.delete(this.id);
   }
 
@@ -444,8 +446,7 @@ export class Unit implements SerializableEntityData {
 
         this.blastSprite.setTexture(this.getBlastSpriteTexture(Math.sqrt((cell.x - this.x) ** 2 + (cell.y - this.y) ** 2)));
         setTimeout(() => this.blastSprite.setVisible(false).setActive(false), 75);
-        this.blastSprite.setAngle(degrees);
-        this.blastSprite.setVisible(true).setActive(true);
+        this.blastSprite.setAngle(degrees).setVisible(true).setActive(true).setPosition(this.x, this.y);
         Unit.particleImpact.explode(20, cell.x, cell.y);
         Unit.sfx_blasterHit.play();
         break;
